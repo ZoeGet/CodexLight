@@ -32,6 +32,147 @@ CodexLight 是一个基于 ESP32-C3 SuperMini 的 Codex 状态灯项目。它使
 - 已通过 `pio run` 编译验证。
 - 已加入硬件原理图资料，位于 `Hardware/Schematic/`。
 
+
+## 项目使用框架
+
+CodexLight 分为三个部分：
+
+```text
+Codex Desktop 本地日志
+        ↓
+Bridge 电脑端脚本
+        ↓ USB 串口 / UDP 局域网
+ESP32-C3 固件
+        ↓
+三颗独立 WS2812B 状态灯
+```
+
+各部分职责：
+
+- `Codex Desktop`：产生本地会话日志和诊断日志。
+- `Bridge/`：电脑端桥接程序，监听 Codex 日志，判断 `GREEN` / `RED` / `YELLOW` 状态，并通过 USB 串口或 UDP 发送给 ESP32。
+- `Firmware/`：ESP32-C3 固件，接收串口或 UDP 状态命令，控制三颗 WS2812B。
+- `Hardware/`：硬件原理图和后续硬件资料。
+- `Docs/`：实现说明和后续交接文档。
+
+推荐使用方式：
+
+- 开发和调试阶段：优先使用 USB 串口，命令简单，便于确认硬件是否正常。
+- 长期日常使用：使用 Win10 托盘后台模式，同时启用 USB 串口和 UDP。
+- 纯无线摆放：配置 Wi-Fi、完成 UDP 配对后，只使用 UDP 模式。
+
+## 首次下载后的配置与编译
+
+首次 clone 或下载项目后，按下面顺序操作。
+
+### 1. 安装基础工具
+
+需要安装：
+
+- Python 3
+- PlatformIO
+- Git
+- ESP32-C3 对应 USB 驱动，取决于你的开发板串口芯片
+
+如果要使用 USB 串口自动识别，需要安装 pyserial：
+
+```powershell
+pip install pyserial
+```
+
+只使用 UDP 时，电脑端不需要 pyserial。
+
+### 2. 配置 Wi-Fi（仅无线 UDP 需要）
+
+仓库不会提交真实 Wi-Fi 配置。复制示例文件：
+
+```text
+Firmware\include\wifi_secrets.example.h
+```
+
+为本地私有文件：
+
+```text
+Firmware\include\wifi_secrets.h
+```
+
+然后填写自己的 Wi-Fi：
+
+```cpp
+#define CODEXLIGHT_WIFI_SSID 你的WiFi名称
+#define CODEXLIGHT_WIFI_PASSWORD 你的WiFi密码
+```
+
+`wifi_secrets.h` 已被 `.gitignore` 忽略，不要提交到 GitHub。
+
+如果只使用 USB 串口，可以不创建 `wifi_secrets.h`。固件仍可编译，并通过串口工作。
+
+### 3. 编译固件
+
+```powershell
+cd Firmware
+pio run
+```
+
+### 4. 烧录固件
+
+连接 ESP32-C3 后运行：
+
+```powershell
+pio run -t upload
+```
+
+如果 PlatformIO 没有自动识别端口，可以在 `Firmware/platformio.ini` 中临时指定 `upload_port`，或者用 PlatformIO 的设备列表确认端口。
+
+### 5. 首次无线配对（仅 UDP 需要）
+
+ESP32 第一次没有 token 时，上电会自动进入配对窗口。电脑端运行：
+
+```powershell
+python Bridge\codex_light_monitor.py --pair --udp-port 4210
+```
+
+配对成功后会生成：
+
+```text
+Bridge\config.local.json
+```
+
+里面保存 UDP token、ESP32 MAC 和最近 IP。这个文件也是本地私有配置，不要提交。
+
+### 6. 启动电脑端 Bridge
+
+控制台方式：
+
+```powershell
+python Bridge\codex_light_monitor.py --serial auto --baud 115200 --udp --udp-port 4210
+```
+
+Win10 托盘后台方式：
+
+```text
+Bridge\start_codex_light_tray.bat
+```
+
+双击后会在右下角任务栏折叠区显示托盘图标。
+
+### 7. 后续需要修改的文件
+
+通常只需要改这些本地文件：
+
+```text
+Firmware\include\wifi_secrets.h     # Wi-Fi 名称和密码，本地私有
+Bridge\config.local.json             # UDP 配对后自动生成，本地私有
+Bridge\start_codex_light_tray.bat    # 可选：选择串口/UDP 启动参数
+```
+
+不建议直接修改这些文件，除非你在开发功能：
+
+```text
+Firmware\src\main.cpp
+Bridge\codex_light_monitor.py
+```
+
 ## 硬件配置
 
 主控：ESP32-C3 SuperMini

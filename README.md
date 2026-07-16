@@ -32,6 +32,7 @@ CodexLight 是一个基于 ESP32-C3 SuperMini 的 Codex 状态灯项目。它使
 - 已通过 `pio run` 编译验证。
 - 已加入硬件原理图资料，位于 `Hardware/Schematic/`。
 - 已加入 3D 打印外壳文件，位于 `Hardware/Enclosure/`。
+- 已加入 PCB 制造文件和源工程文件，位于 `Hardware/PCB/`。
 
 
 ## 项目使用框架
@@ -219,6 +220,11 @@ CodexLight/
     ├── Enclosure/
     │   ├── CodexLight_B.stl
     │   └── CodexLight_T.stl
+    ├── PCB/
+    │   ├── Gerber/
+    │   │   └── CodexLight_PCB_Gerber.zip
+    │   └── Source/
+    │       └── CodexLight.epro2
     └── Schematic/
         └── Schematic1.pdf
 ```
@@ -228,7 +234,7 @@ CodexLight/
 - `Bridge/`：电脑端桥接程序，负责监听 Codex 日志并发送灯光状态。
 - `Docs/`：项目文档目录。
 - `Firmware/`：ESP32-C3 固件工程。
-- `Hardware/`：硬件原理图、3D 打印外壳和后续硬件资料。
+- `Hardware/`：硬件原理图、PCB 制造文件、3D 打印外壳和后续硬件资料。
 
 ## 电脑端 Bridge
 
@@ -404,6 +410,8 @@ pio run
 - `Hardware/Schematic/Schematic1.pdf`：当前原理图文件。
 - `Hardware/Enclosure/CodexLight_B.stl`：3D 打印外壳底壳文件。
 - `Hardware/Enclosure/CodexLight_T.stl`：3D 打印外壳顶盖文件。
+- `Hardware/PCB/Gerber/CodexLight_PCB_Gerber.zip`：PCB 打板用 Gerber 制造文件。
+- `Hardware/PCB/Source/CodexLight.epro2`：立创 EDA PCB 源工程文件。
 
 ## 许可
 

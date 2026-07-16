@@ -32,6 +32,7 @@ Both methods can be enabled at the same time, or you can choose only one.
 - Firmware has been verified with `pio run`.
 - Hardware schematic files are under `Hardware/Schematic/`.
 - 3D printable enclosure files are under `Hardware/Enclosure/`.
+- PCB manufacturing files and source project files are under `Hardware/PCB/`.
 
 
 ## Project Usage Framework
@@ -219,6 +220,11 @@ CodexLight/
     ├── Enclosure/
     │   ├── CodexLight_B.stl
     │   └── CodexLight_T.stl
+    ├── PCB/
+    │   ├── Gerber/
+    │   │   └── CodexLight_PCB_Gerber.zip
+    │   └── Source/
+    │       └── CodexLight.epro2
     └── Schematic/
         └── Schematic1.pdf
 ```
@@ -228,7 +234,7 @@ Directory overview:
 - `Bridge/`: desktop-side bridge program that monitors Codex logs and sends light states.
 - `Docs/`: project documentation directory.
 - `Firmware/`: ESP32-C3 firmware project.
-- `Hardware/`: schematic, 3D printable enclosure, and future hardware files.
+- `Hardware/`: schematic, PCB manufacturing files, 3D printable enclosure, and future hardware files.
 
 ## Desktop Bridge
 
@@ -404,6 +410,8 @@ Hardware files are located under `Hardware/`:
 - `Hardware/Schematic/Schematic1.pdf`: current schematic file.
 - `Hardware/Enclosure/CodexLight_B.stl`: 3D printable bottom enclosure file.
 - `Hardware/Enclosure/CodexLight_T.stl`: 3D printable top cover file.
+- `Hardware/PCB/Gerber/CodexLight_PCB_Gerber.zip`: Gerber manufacturing files for PCB fabrication.
+- `Hardware/PCB/Source/CodexLight.epro2`: LCSC EDA PCB source project file.
 
 ## License
 

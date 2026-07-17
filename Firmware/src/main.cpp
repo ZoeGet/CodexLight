@@ -1,353 +1,226 @@
 #include <Arduino.h>
-#include <cstring>
-
 #include <Preferences.h>
+#include <WiFi.h>
+#include <WiFiUdp.h>
 
 #include "config.h"
 #include "config_portal.h"
 #include "led.h"
 
-#include <WiFi.h>
-#include <WiFiUdp.h>
-
 namespace {
 
 using namespace CodexLightConfig;
 
-LedController leds;
-Preferences preferences;
-String serialBuffer;
-unsigned long lastWirelessPacketMs = 0;
-String controlToken;
-bool pairingMode = false;
-unsigned long pairingModeUntilMs = 0;
-
-WiFiUDP udp;
-ConfigPortal configPortal;
-bool udpStarted = false;
-unsigned long lastWifiAttemptMs = 0;
-unsigned long lastHelloMs = 0;
-wl_status_t lastWifiStatus = WL_IDLE_STATUS;
-unsigned long wifiConnectStartedMs = 0;
-
-enum class LightState {
-  Red,
-  Green,
-  Yellow,
-  Unknown,
+enum class TransportMode {
+  Auto,
+  Wired,
+  Wireless,
 };
 
-const char* lightStateName(LightState state) {
-  switch (state) {
-    case LightState::Red:
-      return "RED";
-    case LightState::Green:
-      return "GREEN";
-    case LightState::Yellow:
-      return "YELLOW";
-    case LightState::Unknown:
-      return "UNKNOWN";
-  }
-  return "UNKNOWN";
-}
+enum class Transport {
+  None,
+  Wired,
+  Wireless,
+};
+
+enum class LightState {
+  Green,
+  Red,
+  Yellow,
+};
+
+LedController leds;
+ConfigPortal configPortal;
+Preferences preferences;
+WiFiUDP udp;
+
+TransportMode transportMode = TransportMode::Auto;
+Transport activeTransport = Transport::None;
+LightState wiredState = LightState::Green;
+LightState wirelessState = LightState::Green;
+
+String serialBuffer;
+bool udpStarted = false;
+unsigned long lastWiredPacketMs = 0;
+unsigned long lastWirelessPacketMs = 0;
+unsigned long lastHelloMs = 0;
+bool linkWasConnected = false;
+bool connectionAnimationActive = false;
+unsigned long connectionAnimationStartedMs = 0;
 
 void debugPrint(const String& message) {
   if (!DEBUG_SERIAL) {
     return;
   }
-
   Serial.print("[CodexLight ");
   Serial.print(millis());
   Serial.print(" ms] ");
   Serial.println(message);
 }
 
-String maskToken(const String& token) {
-  if (token.length() == 0) {
-    return "none";
+const char* modeName(TransportMode mode) {
+  switch (mode) {
+    case TransportMode::Auto:
+      return "AUTO";
+    case TransportMode::Wired:
+      return "WIRED";
+    case TransportMode::Wireless:
+      return "WIRELESS";
   }
-  if (token.length() <= 8) {
-    return "<short-token>";
+  return "AUTO";
+}
+
+const char* transportName(Transport transport) {
+  switch (transport) {
+    case Transport::Wired:
+      return "WIRED";
+    case Transport::Wireless:
+      return "WIRELESS";
+    case Transport::None:
+      return "NONE";
   }
-  return token.substring(0, 8) + "..." + token.substring(token.length() - 4) +
-         " (len=" + String(token.length()) + ")";
+  return "NONE";
 }
 
-String sanitizeCommand(String command) {
-  const int tokenStart = command.indexOf("token=");
-  if (tokenStart < 0) {
-    return command;
+TransportMode parseMode(String value) {
+  value.trim();
+  value.toUpperCase();
+  if (value == "WIRED") {
+    return TransportMode::Wired;
   }
-
-  int tokenEnd = command.indexOf(' ', tokenStart);
-  if (tokenEnd < 0) {
-    tokenEnd = command.length();
+  if (value == "WIRELESS") {
+    return TransportMode::Wireless;
   }
-
-  const String token = command.substring(tokenStart + 6, tokenEnd);
-  return command.substring(0, tokenStart + 6) + maskToken(token) + command.substring(tokenEnd);
+  return TransportMode::Auto;
 }
 
-const char* wifiStatusName(wl_status_t status) {
-  switch (status) {
-    case WL_IDLE_STATUS:
-      return "IDLE";
-    case WL_NO_SSID_AVAIL:
-      return "NO_SSID_AVAILABLE";
-    case WL_SCAN_COMPLETED:
-      return "SCAN_COMPLETED";
-    case WL_CONNECTED:
-      return "CONNECTED";
-    case WL_CONNECT_FAILED:
-      return "CONNECT_FAILED";
-    case WL_CONNECTION_LOST:
-      return "CONNECTION_LOST";
-    case WL_DISCONNECTED:
-      return "DISCONNECTED";
-    default:
-      return "UNKNOWN";
-  }
-}
-
-String localIpString() {
-  return WiFi.localIP().toString();
-}
-
-void startWifiConnect() {
-  debugPrint("Starting WiFiManager autoConnect AP=" + configPortal.apSsid());
-  const bool connected = configPortal.autoConnect();
-  wifiConnectStartedMs = millis();
-  lastWifiAttemptMs = millis();
-  debugPrint(String("WiFiManager autoConnect result=") + (connected ? "connected" : "not_connected"));
-  if (WiFi.status() == WL_CONNECTED) {
-    debugPrint("Wi-Fi connected ssid=" + WiFi.SSID() + " ip=" + localIpString() + " mac=" + WiFi.macAddress() +
-               " rssi=" + String(WiFi.RSSI()) + " dBm");
-    leds.showGreen();
-  } else {
-    leds.showYellow();
-  }
-}
-
-void saveControlToken(const String& token) {
-  preferences.begin("codexlight", false);
-  preferences.putString("token", token);
-  preferences.end();
-  controlToken = token;
-  debugPrint("Saved UDP token " + maskToken(controlToken));
-}
-
-void loadControlToken() {
-  preferences.begin("codexlight", true);
-  controlToken = preferences.getString("token", "");
-  preferences.end();
-  debugPrint("Loaded UDP token " + maskToken(controlToken));
-}
-
-void clearControlToken() {
-  preferences.begin("codexlight", false);
-  preferences.remove("token");
-  preferences.end();
-  controlToken = "";
-  debugPrint("Cleared UDP token from NVS");
-}
-
-void enterPairingMode(unsigned long durationMs) {
-  pairingMode = true;
-  pairingModeUntilMs = millis() + durationMs;
-  leds.showYellow();
-  debugPrint("Entered pairing mode for " + String(durationMs / 1000UL) + " seconds");
-}
-
-void maintainPairingMode() {
-  if (pairingMode && static_cast<long>(millis() - pairingModeUntilMs) >= 0) {
-    pairingMode = false;
-    debugPrint("Pairing mode expired");
-  }
-}
-
-String getValueAfter(String command, const String& key) {
-  String upperCommand = command;
-  String upperKey = key;
-  upperCommand.toUpperCase();
-  upperKey.toUpperCase();
-
-  const int keyStart = upperCommand.indexOf(upperKey);
-  if (keyStart < 0) {
-    return "";
-  }
-
-  const int valueStart = keyStart + key.length();
-  int valueEnd = command.indexOf(' ', valueStart);
-  if (valueEnd < 0) {
-    valueEnd = command.length();
-  }
-  return command.substring(valueStart, valueEnd);
-}
-
-String normalizeCommand(String command) {
+bool parseState(String command, LightState& state) {
   command.trim();
   command.toUpperCase();
-
-  constexpr const char* prefix = "CODEXLIGHT/1 ";
-  if (command.startsWith(prefix)) {
-    command = command.substring(strlen(prefix));
-    command.trim();
+  if (command.endsWith(" GREEN")) {
+    command = "GREEN";
+  } else if (command.endsWith(" RED")) {
+    command = "RED";
+  } else if (command.endsWith(" YELLOW")) {
+    command = "YELLOW";
   }
 
-  return command;
-}
-
-LightState parseState(String command) {
-  command = normalizeCommand(command);
-
-  if (command == "RED") {
-    return LightState::Red;
-  }
   if (command == "GREEN") {
-    return LightState::Green;
+    state = LightState::Green;
+    return true;
+  }
+  if (command == "RED") {
+    state = LightState::Red;
+    return true;
   }
   if (command == "YELLOW") {
-    return LightState::Yellow;
+    state = LightState::Yellow;
+    return true;
   }
-  return LightState::Unknown;
+  return false;
 }
 
-LightState parseAuthenticatedState(String command, bool requireAuth) {
-  command.trim();
-
-  String upperCommand = command;
-  upperCommand.toUpperCase();
-
-  constexpr const char* prefix = "CODEXLIGHT/1 ";
-  if (!upperCommand.startsWith(prefix)) {
-    return requireAuth ? LightState::Unknown : parseState(command);
-  }
-
-  command = command.substring(strlen(prefix));
-  command.trim();
-  upperCommand = command;
-  upperCommand.toUpperCase();
-
-  if (controlToken.length() == 0) {
-    return requireAuth ? LightState::Unknown : parseState(command);
-  }
-
-  const String receivedToken = getValueAfter(command, "token=");
-  if (receivedToken != controlToken) {
-    debugPrint(
-        "Rejected UDP command: token mismatch received=" + maskToken(receivedToken) +
-        " expected=" + maskToken(controlToken));
-    return LightState::Unknown;
-  }
-
-  if (upperCommand.endsWith(" GREEN")) {
-    return LightState::Green;
-  }
-  if (upperCommand.endsWith(" RED")) {
-    return LightState::Red;
-  }
-  if (upperCommand.endsWith(" YELLOW")) {
-    return LightState::Yellow;
-  }
-  return LightState::Unknown;
-}
-
-bool handlePairCommand(String command) {
-  command.trim();
-  String upperCommand = command;
-  upperCommand.toUpperCase();
-
-  if (upperCommand == "PAIR") {
-    debugPrint("Serial command PAIR received");
-    enterPairingMode(60000UL);
-    return true;
-  }
-
-  if (upperCommand == "CLEAR_TOKEN") {
-    debugPrint("Serial command CLEAR_TOKEN received");
-    clearControlToken();
-    enterPairingMode(120000UL);
-    return true;
-  }
-
-  if (upperCommand == "CLEAR_WIFI") {
-    debugPrint("Serial command CLEAR_WIFI received");
-    configPortal.resetSettings();
-    WiFi.disconnect(false, true);
-    leds.showYellow();
-    return true;
-  }
-
-  if (upperCommand == "WIFI_RECONNECT") {
-    debugPrint("Serial command WIFI_RECONNECT received");
-    WiFi.disconnect(false, true);
-    startWifiConnect();
-    return true;
-  }
-
-  constexpr const char* pairPrefix = "CODEXLIGHT/1 PAIR_SET ";
-  if (!upperCommand.startsWith(pairPrefix)) {
-    return false;
-  }
-
-  if (!pairingMode && controlToken.length() > 0) {
-    debugPrint("Ignored PAIR_SET: device already has a token and is not in pairing mode");
-    return true;
-  }
-
-  const String newToken = getValueAfter(command, "token=");
-  if (newToken.length() < 16) {
-    debugPrint("Ignored PAIR_SET: token is too short, len=" + String(newToken.length()));
-    return true;
-  }
-
-  saveControlToken(newToken);
-  pairingMode = false;
-  leds.showGreen();
-
-  if (udpStarted) {
-    const String response = "CODEXLIGHT/1 PAIR_OK mac=" + WiFi.macAddress();
-    udp.beginPacket(udp.remoteIP(), udp.remotePort());
-    udp.print(response);
-    udp.endPacket();
-    debugPrint("Sent PAIR_OK to " + udp.remoteIP().toString() + ":" + String(udp.remotePort()) +
-               " mac=" + WiFi.macAddress());
-  }
-
-  return true;
-}
-
-void applyState(LightState state) {
-  if (state != LightState::Unknown) {
-    debugPrint(String("Apply state ") + lightStateName(state));
-  }
-
+void showState(LightState state) {
   switch (state) {
-    case LightState::Red:
-      leds.showRed();
-      break;
     case LightState::Green:
       leds.showGreen();
+      break;
+    case LightState::Red:
+      leds.showRed();
       break;
     case LightState::Yellow:
       leds.showYellow();
       break;
-    case LightState::Unknown:
-      break;
   }
 }
 
-void handleCommand(String command, bool requireAuth) {
-  if (handlePairCommand(command)) {
+bool packetIsFresh(unsigned long packetMs, unsigned long now) {
+  return packetMs != 0 && now - packetMs <= LINK_TIMEOUT_MS;
+}
+
+Transport selectActiveTransport(unsigned long now) {
+  const bool wiredFresh = packetIsFresh(lastWiredPacketMs, now);
+  const bool wirelessFresh = packetIsFresh(lastWirelessPacketMs, now);
+
+  if (transportMode == TransportMode::Wired) {
+    return wiredFresh ? Transport::Wired : Transport::None;
+  }
+  if (transportMode == TransportMode::Wireless) {
+    return wirelessFresh ? Transport::Wireless : Transport::None;
+  }
+  if (wiredFresh) {
+    return Transport::Wired;
+  }
+  if (wirelessFresh) {
+    return Transport::Wireless;
+  }
+  return Transport::None;
+}
+
+void saveMode() {
+  preferences.begin("codexlight", false);
+  preferences.putString("transport", modeName(transportMode));
+  preferences.end();
+}
+
+void loadMode() {
+  preferences.begin("codexlight", false);
+  const String saved = preferences.getString("transport", DEFAULT_TRANSPORT_MODE);
+  preferences.end();
+  transportMode = parseMode(saved);
+}
+
+void printStatus() {
+  Serial.print("STATUS mode=");
+  Serial.print(modeName(transportMode));
+  Serial.print(" active=");
+  Serial.print(transportName(activeTransport));
+  Serial.print(" wifi=");
+  Serial.print(configPortal.wifiConnected() ? "CONNECTED" : "DISCONNECTED");
+  if (configPortal.wifiConnected()) {
+    Serial.print(" ip=");
+    Serial.print(WiFi.localIP());
+  }
+  Serial.println();
+}
+
+void handleControlCommand(String command) {
+  command.trim();
+  String upper = command;
+  upper.toUpperCase();
+
+  if (upper.startsWith("MODE ")) {
+    transportMode = parseMode(upper.substring(5));
+    saveMode();
+    lastWiredPacketMs = 0;
+    lastWirelessPacketMs = 0;
+    Serial.println(String("MODE_OK ") + modeName(transportMode));
+    return;
+  }
+  if (upper == "STATUS") {
+    printStatus();
+    return;
+  }
+  if (upper == "WIFI_CONFIG") {
+    configPortal.start();
+    Serial.println(String("WIFI_PORTAL ") + configPortal.apSsid() + " 192.168.4.1");
+    return;
+  }
+  if (upper == "CLEAR_WIFI") {
+    configPortal.resetSettings();
+    Serial.println(String("WIFI_CLEARED ") + configPortal.apSsid() + " 192.168.4.1");
     return;
   }
 
-  const LightState state = parseAuthenticatedState(command, requireAuth);
-  if (state != LightState::Unknown) {
-    applyState(state);
-  } else {
-    debugPrint(String("Ignored command requireAuth=") + (requireAuth ? "true" : "false") +
-               " data=" + sanitizeCommand(command));
+  LightState state;
+  if (upper == "PING") {
+    lastWiredPacketMs = millis();
+    Serial.println("PONG");
+    return;
+  }
+  if (parseState(upper, state)) {
+    wiredState = state;
+    lastWiredPacketMs = millis();
   }
 }
 
@@ -356,18 +229,15 @@ void handleSerialInput() {
     const char ch = static_cast<char>(Serial.read());
     if (ch == '\n' || ch == '\r') {
       if (serialBuffer.length() > 0) {
-        debugPrint("Serial RX " + sanitizeCommand(serialBuffer));
-        handleCommand(serialBuffer, false);
+        handleControlCommand(serialBuffer);
         serialBuffer = "";
       }
       continue;
     }
-
-    if (serialBuffer.length() < 64) {
+    if (serialBuffer.length() < 96) {
       serialBuffer += ch;
     } else {
       serialBuffer = "";
-      debugPrint("Serial RX buffer overflow; dropped command");
     }
   }
 }
@@ -376,66 +246,38 @@ void sendHello() {
   if (!udpStarted) {
     return;
   }
-
-  const String type = pairingMode ? "PAIR_HELLO" : "HELLO";
-  const String message = "CODEXLIGHT/1 " + type + " mac=" + WiFi.macAddress();
+  const String message = "CODEXLIGHT/1 HELLO mac=" + WiFi.macAddress() +
+                         " mode=" + modeName(transportMode);
   udp.beginPacket(IPAddress(255, 255, 255, 255), UDP_PORT);
   udp.print(message);
   udp.endPacket();
-  debugPrint("Sent UDP " + type + " mac=" + WiFi.macAddress() + " ip=" + localIpString());
 }
 
-void maintainWifi() {
-  const wl_status_t status = WiFi.status();
-  if (status != lastWifiStatus) {
-    lastWifiStatus = status;
-    debugPrint(String("Wi-Fi status ") + wifiStatusName(status));
-    if (status == WL_CONNECTED) {
-      debugPrint("Wi-Fi connected ssid=" + WiFi.SSID() + " ip=" + localIpString() + " mac=" + WiFi.macAddress() +
-                 " rssi=" + String(WiFi.RSSI()) + " dBm");
-      leds.showGreen();
+void maintainUdp() {
+  if (!configPortal.wifiConnected()) {
+    if (udpStarted) {
+      udp.stop();
+      udpStarted = false;
     }
+    return;
   }
 
-  if (status == WL_CONNECTED) {
-    if (!udpStarted) {
-      udpStarted = udp.begin(UDP_PORT) == 1;
-      if (udpStarted) {
-        lastWirelessPacketMs = millis();
-        debugPrint("UDP listener started on port " + String(UDP_PORT));
-        sendHello();
-      } else {
-        debugPrint("UDP listener failed to start on port " + String(UDP_PORT));
-      }
-    }
-
-    const unsigned long now = millis();
-    const unsigned long helloIntervalMs = pairingMode ? 1000UL : 5000UL;
-    if (now - lastHelloMs >= helloIntervalMs) {
-      lastHelloMs = now;
+  if (!udpStarted) {
+    udpStarted = udp.begin(UDP_PORT) == 1;
+    if (udpStarted) {
+      debugPrint("UDP listening on " + String(UDP_PORT) + " at " + WiFi.localIP().toString());
       sendHello();
     }
-    return;
   }
 
-  if (udpStarted) {
-    debugPrint("UDP listener stopped because Wi-Fi is not connected");
-  }
-  udpStarted = false;
-  lastHelloMs = 0;
-
-  const unsigned long now = millis();
-  if (now - lastWifiAttemptMs < 5000UL) {
-    return;
-  }
-
-  lastWifiAttemptMs = now;
-  debugPrint("Wi-Fi disconnected; use serial WIFI_RECONNECT or reset to reopen WiFiManager portal if needed");
-}
-
-void handleUdpInput() {
   if (!udpStarted) {
     return;
+  }
+
+  const unsigned long now = millis();
+  if (now - lastHelloMs >= 2000UL) {
+    lastHelloMs = now;
+    sendHello();
   }
 
   const int packetSize = udp.parsePacket();
@@ -443,58 +285,88 @@ void handleUdpInput() {
     return;
   }
 
-  debugPrint("UDP packet available size=" + String(packetSize) + " from=" +
-             udp.remoteIP().toString() + ":" + String(udp.remotePort()));
-
-  char packet[80];
-  const int len = udp.read(packet, sizeof(packet) - 1);
-  if (len <= 0) {
-    debugPrint("UDP read returned no payload");
+  char packet[128];
+  const int length = udp.read(packet, sizeof(packet) - 1);
+  if (length <= 0) {
     return;
   }
+  packet[length] = '\0';
 
-  packet[len] = '\0';
-  lastWirelessPacketMs = millis();
-  debugPrint("UDP RX " + sanitizeCommand(String(packet)));
-  handleCommand(String(packet), true);
+  String command(packet);
+  LightState state;
+  String upper = command;
+  upper.trim();
+  upper.toUpperCase();
+  if (upper == "PING" || upper == "CODEXLIGHT/1 PING") {
+    lastWirelessPacketMs = now;
+  } else if (parseState(upper, state)) {
+    wirelessState = state;
+    lastWirelessPacketMs = now;
+  }
 }
 
-void handleWirelessTimeout() {
-  if (!udpStarted || lastWirelessPacketMs == 0) {
+void updateLeds() {
+  const unsigned long now = millis();
+  activeTransport = selectActiveTransport(now);
+  const bool connected = activeTransport != Transport::None;
+
+  if (connected && !linkWasConnected) {
+    connectionAnimationActive = true;
+    connectionAnimationStartedMs = now;
+    debugPrint(String("Computer link connected via ") + transportName(activeTransport));
+  } else if (!connected && linkWasConnected) {
+    connectionAnimationActive = false;
+    debugPrint("Computer link disconnected");
+  }
+  linkWasConnected = connected;
+
+  if (!connected) {
+    const bool on = (now / DISCONNECTED_BLINK_HALF_PERIOD_MS) % 2 == 0;
+    if (on) {
+      leds.showYellow();
+    } else {
+      leds.allOff();
+    }
     return;
   }
 
-  if (millis() - lastWirelessPacketMs > WIRELESS_TIMEOUT_MS) {
-    leds.showYellow();
-    debugPrint("Wireless heartbeat timeout; showing YELLOW");
-    lastWirelessPacketMs = millis();
+  if (connectionAnimationActive) {
+    if (now - connectionAnimationStartedMs < CONNECTED_ANIMATION_MS) {
+      const bool on = ((now - connectionAnimationStartedMs) /
+                       CONNECTED_BLINK_HALF_PERIOD_MS) % 2 == 0;
+      if (on) {
+        leds.showGreen();
+      } else {
+        leds.allOff();
+      }
+      return;
+    }
+    connectionAnimationActive = false;
   }
+
+  showState(activeTransport == Transport::Wired ? wiredState : wirelessState);
 }
 
 }  // namespace
 
 void setup() {
   Serial.begin(SERIAL_BAUD);
-  delay(300);
-  debugPrint("Booting CodexLight firmware");
-  debugPrint("Serial baud " + String(SERIAL_BAUD));
+  delay(500);
+  Serial.println();
+  Serial.println("CODEXLIGHT READY");
+
   leds.begin();
-  loadControlToken();
+  loadMode();
   configPortal.begin();
-  leds.showGreen();
-
-  if (controlToken.length() == 0) {
-    enterPairingMode(120000UL);
-  }
-
-  debugPrint("WiFiManager AP " + configPortal.apSsid() + " password=" + String(CONFIG_AP_PASSWORD));
-  startWifiConnect();
+  debugPrint(String("Boot mode=") + modeName(transportMode));
+  debugPrint(String("Config AP=") + configPortal.apSsid() + " password=" + CONFIG_AP_PASSWORD);
+  printStatus();
 }
 
 void loop() {
-  maintainPairingMode();
   handleSerialInput();
-  maintainWifi();
-  handleUdpInput();
-  handleWirelessTimeout();
+  configPortal.process();
+  maintainUdp();
+  updateLeds();
+  delay(2);
 }

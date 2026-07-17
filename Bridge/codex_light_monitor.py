@@ -13,7 +13,6 @@ pyserial must be installed in the Python environment running this script.
 from __future__ import annotations
 
 import argparse
-import secrets
 import json
 import os
 import re
@@ -42,7 +41,6 @@ class MonitorState:
     pending_calls: Dict[str, str] = field(default_factory=dict)
     pending_approvals: Dict[str, str] = field(default_factory=dict)
     active_turn_id: Optional[str] = None
-    completed_hint_at: Optional[float] = None
 
 
 class StateEmitter:
@@ -55,7 +53,6 @@ class StateEmitter:
         udp_host: str,
         udp_port: int,
         udp_interval: float,
-        udp_token: str,
         device_mac: str,
         device_ip: str,
         config_path: Path,
@@ -73,13 +70,13 @@ class StateEmitter:
         self.udp_host = udp_host
         self.udp_port = udp_port
         self.udp_interval = udp_interval
-        self.udp_token = udp_token
         self.device_mac = normalize_mac(device_mac)
         self.device_ip = device_ip
         self.config_path = config_path
         self.config = config
         self.udp_socket = None
         self.last_udp_send = 0.0
+        self.last_serial_send = 0.0
         self.last_udp_listen = 0.0
 
         if serial_port:
@@ -125,9 +122,12 @@ class StateEmitter:
             self.serial = self.serial_module.Serial(port, baudrate=self.baud, timeout=1)
             print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} SERIAL connected {port}", flush=True)
             time.sleep(SERIAL_READY_DELAY_SECONDS)
+            self.serial.write(b"MODE WIRED\n")
+            self.serial.flush()
             if self.last_state:
                 self.serial.write((self.last_state + "\n").encode("ascii"))
                 self.serial.flush()
+                self.last_serial_send = time.monotonic()
         except Exception as exc:  # pyserial raises platform-specific exceptions.
             self.serial = None
             print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} SERIAL connect failed {port}: {exc}", flush=True)
@@ -201,8 +201,13 @@ class StateEmitter:
             and self.last_state is not None
             and now - self.last_udp_send >= self.udp_interval
         )
+        should_repeat_serial = (
+            self.serial_port
+            and self.last_state is not None
+            and now - self.last_serial_send >= self.udp_interval
+        )
 
-        if not self.repeat and not state_changed and not should_repeat_udp:
+        if not self.repeat and not state_changed and not should_repeat_udp and not should_repeat_serial:
             return
 
         self.last_state = state
@@ -214,10 +219,11 @@ class StateEmitter:
         if self.serial_port:
             self.connect_serial()
 
-        if self.serial is not None and (self.repeat or state_changed):
+        if self.serial is not None and (self.repeat or state_changed or should_repeat_serial):
             try:
                 self.serial.write((state + "\n").encode("ascii"))
                 self.serial.flush()
+                self.last_serial_send = now
             except Exception as exc:
                 print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} SERIAL write failed: {exc}", flush=True)
                 self.close_serial()
@@ -229,10 +235,7 @@ class StateEmitter:
     def emit_udp(self, state: str) -> None:
         if self.udp_socket is None:
             return
-        if self.udp_token:
-            payload = f"CODEXLIGHT/1 token={self.udp_token} {state}\n".encode("ascii")
-        else:
-            payload = f"CODEXLIGHT/1 {state}\n".encode("ascii")
+        payload = f"CODEXLIGHT/1 {state}\n".encode("ascii")
         try:
             target = self.device_ip or self.udp_host
             self.udp_socket.sendto(payload, (target, self.udp_port))
@@ -266,7 +269,7 @@ class StateEmitter:
             if not message.startswith("CODEXLIGHT/1 "):
                 continue
 
-            if " HELLO" not in message and " PAIR_HELLO" not in message:
+            if " HELLO" not in message:
                 continue
 
             mac = extract_field(message, "mac")
@@ -326,79 +329,6 @@ def save_local_config(path: Path, config: dict) -> None:
     with path.open("w", encoding="utf-8") as handle:
         json.dump(config, handle, indent=2)
         handle.write("\n")
-
-
-def pair_device(args: argparse.Namespace) -> int:
-    token = args.udp_token or secrets.token_hex(24)
-    config = load_local_config(args.config)
-    expected_mac = normalize_mac(args.device_mac or str(config.get("device_mac") or ""))
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.settimeout(1.0)
-    try:
-        sock.bind(("", args.udp_port))
-    except OSError:
-        pass
-
-    print(
-        "Pairing CodexLight. Put the ESP32 in pairing mode first "
-        "(send PAIR over serial, or use a fresh device with no token).",
-        flush=True,
-    )
-    if expected_mac:
-        print(f"Waiting for device MAC {expected_mac}", flush=True)
-
-    deadline = time.monotonic() + args.pair_timeout
-    paired = False
-    sender = None
-    device_mac = ""
-
-    while time.monotonic() < deadline:
-        try:
-            data, sender = sock.recvfrom(256)
-        except socket.timeout:
-            continue
-        except OSError:
-            break
-
-        text = data.decode("ascii", errors="ignore").strip()
-        if not text.startswith("CODEXLIGHT/1 PAIR_HELLO") and not text.startswith("CODEXLIGHT/1 HELLO"):
-            continue
-
-        device_mac = normalize_mac(extract_field(text, "mac"))
-        if expected_mac and device_mac != expected_mac:
-            continue
-
-        payload = f"CODEXLIGHT/1 PAIR_SET token={token}\n".encode("ascii")
-        for target in {sender[0], args.udp_host}:
-            sock.sendto(payload, (target, args.udp_port))
-
-        try:
-            data, sender = sock.recvfrom(256)
-        except socket.timeout:
-            continue
-        text = data.decode("ascii", errors="ignore").strip()
-        ok_mac = normalize_mac(extract_field(text, "mac"))
-        if text.startswith("CODEXLIGHT/1 PAIR_OK") and (not expected_mac or ok_mac == expected_mac):
-            device_mac = ok_mac or device_mac
-            paired = True
-            break
-
-    if not paired:
-        print("Pairing timed out. Check Wi-Fi, UDP port, and pairing mode.", flush=True)
-        return 1
-
-    config["udp_token"] = token
-    config["udp_port"] = args.udp_port
-    if device_mac:
-        config["device_mac"] = device_mac
-    if sender:
-        config["last_device_ip"] = sender[0]
-    save_local_config(args.config, config)
-    print(f"Paired CodexLight device. Token saved to {args.config}", flush=True)
-    return 0
 
 
 def iter_jsonl_files(root: Path, max_age_days: int) -> Iterable[Path]:
@@ -468,8 +398,6 @@ def set_state(ms: MonitorState, state: str, reason: str) -> None:
     ms.state = state
     ms.reason = reason
     ms.last_activity = time.monotonic()
-    if state != STATE_GREEN:
-        ms.completed_hint_at = None
 
 
 def handle_session_event(ms: MonitorState, event: dict) -> None:
@@ -487,6 +415,13 @@ def handle_session_event(ms: MonitorState, event: dict) -> None:
         ms.pending_approvals.clear()
         ms.active_turn_id = None
         set_state(ms, STATE_GREEN, "turn_aborted")
+        return
+
+    if event_type == "event_msg" and payload_type == "task_complete":
+        ms.pending_calls.clear()
+        ms.pending_approvals.clear()
+        ms.active_turn_id = None
+        set_state(ms, STATE_GREEN, "task_complete")
         return
 
     if event_type == "event_msg" and payload_type == "user_message":
@@ -572,15 +507,6 @@ def handle_sqlite_logs(ms: MonitorState, con: sqlite3.Connection, last_id: int) 
             set_state(ms, STATE_RED, f"sqlite_error:{target}")
             continue
 
-        if body.startswith("app-server event: item/completed"):
-            ms.completed_hint_at = time.monotonic()
-            ms.reason = "app_server_item_completed"
-            continue
-
-        if body.startswith("app-server event: thread/status/changed"):
-            ms.completed_hint_at = time.monotonic()
-            ms.reason = "thread_status_changed"
-
     return last_id
 
 
@@ -597,16 +523,13 @@ def apply_idle_rules(ms: MonitorState, quiet_timeout: float, complete_grace: flo
         ms.reason = "tool_running"
         return
 
-    if ms.completed_hint_at is not None and now - ms.completed_hint_at >= complete_grace:
-        ms.state = STATE_GREEN
-        ms.reason = "completed_hint"
-        ms.active_turn_id = None
-        return
-
-    if ms.state != STATE_GREEN and now - ms.last_activity >= quiet_timeout:
+    if (
+        ms.active_turn_id is None
+        and ms.state != STATE_GREEN
+        and now - ms.last_activity >= quiet_timeout
+    ):
         ms.state = STATE_GREEN
         ms.reason = "quiet_timeout"
-        ms.active_turn_id = None
 
 
 def parse_args() -> argparse.Namespace:
@@ -626,7 +549,7 @@ def parse_args() -> argparse.Namespace:
         "--complete-grace",
         type=float,
         default=1.5,
-        help="Seconds after app-server item/completed before returning to GREEN.",
+        help="Deprecated compatibility option; task_complete now controls GREEN.",
     )
     parser.add_argument("--from-start", action="store_true", help="Process existing JSONL content.")
     parser.add_argument("--serial", help="Optional serial port, for example COM5, or auto.")
@@ -634,7 +557,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--udp", action="store_true", help="Broadcast states over UDP.")
     parser.add_argument("--udp-host", default="255.255.255.255", help="UDP host or broadcast address.")
     parser.add_argument("--udp-port", type=int, default=4210, help="UDP destination port.")
-    parser.add_argument("--udp-token", default="", help="UDP control token. Overrides config.local.json.")
     parser.add_argument("--device-mac", default="", help="Expected ESP32 MAC address. Overrides config.local.json.")
     parser.add_argument(
         "--udp-interval",
@@ -642,26 +564,15 @@ def parse_args() -> argparse.Namespace:
         default=2.0,
         help="Seconds between repeated UDP state heartbeats.",
     )
-    parser.add_argument("--pair", action="store_true", help="Pair with an ESP32 in pairing mode and save token.")
-    parser.add_argument("--pair-timeout", type=float, default=30.0, help="Pairing timeout in seconds.")
     parser.add_argument("--repeat", action="store_true", help="Print/send repeated identical states.")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    if args.pair:
-        return pair_device(args)
-
     config = load_local_config(args.config)
-    udp_token = args.udp_token or str(config.get("udp_token") or "")
     device_mac = normalize_mac(args.device_mac or str(config.get("device_mac") or ""))
     device_ip = str(config.get("last_device_ip") or "")
-    if args.udp and not udp_token:
-        print(
-            "WARNING: UDP is running without a token. Pair the device with --pair for authenticated UDP.",
-            flush=True,
-        )
 
     emitter = StateEmitter(
         args.serial,
@@ -671,7 +582,6 @@ def main() -> int:
         args.udp_host,
         args.udp_port,
         args.udp_interval,
-        udp_token,
         device_mac,
         device_ip,
         args.config,

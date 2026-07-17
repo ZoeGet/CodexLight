@@ -1,6 +1,6 @@
 #include "led.h"
 
-#include <FastLED.h>
+#include <Adafruit_NeoPixel.h>
 
 #include "config.h"
 
@@ -8,94 +8,109 @@ namespace {
 
 using namespace CodexLightConfig;
 
-CRGB redLed[LEDS_PER_CHANNEL];
-CRGB greenLed[LEDS_PER_CHANNEL];
-CRGB yellowLed[LEDS_PER_CHANNEL];
+Adafruit_NeoPixel redLed(LEDS_PER_CHANNEL, RED_LED_PIN, NEO_BRG + NEO_KHZ800);
+Adafruit_NeoPixel greenLed(LEDS_PER_CHANNEL, GREEN_LED_PIN, NEO_BRG + NEO_KHZ800);
+Adafruit_NeoPixel yellowLed(LEDS_PER_CHANNEL, YELLOW_LED_PIN, NEO_BRG + NEO_KHZ800);
 
-const CRGB RED_COLOR(RED_COLOR_R, RED_COLOR_G, RED_COLOR_B);
-const CRGB GREEN_COLOR(GREEN_COLOR_R, GREEN_COLOR_G, GREEN_COLOR_B);
-const CRGB YELLOW_COLOR(YELLOW_COLOR_R, YELLOW_COLOR_G, YELLOW_COLOR_B);
+uint8_t brightness = DEFAULT_BRIGHTNESS;
 
-void setLed(CRGB* led, const CRGB& color) {
-  led[0] = color;
-  FastLED.show();
+void setPixel(Adafruit_NeoPixel& led, uint8_t red, uint8_t green, uint8_t blue) {
+  led.setPixelColor(0, led.Color(red, green, blue));
 }
 
-void clearLed(CRGB* led) {
-  setLed(led, CRGB::Black);
+void clearPixel(Adafruit_NeoPixel& led) {
+  setPixel(led, 0, 0, 0);
+}
+
+void refreshAll() {
+  redLed.show();
+  greenLed.show();
+  yellowLed.show();
+}
+
+void setState(
+    uint8_t redR,
+    uint8_t redG,
+    uint8_t redB,
+    uint8_t greenR,
+    uint8_t greenG,
+    uint8_t greenB,
+    uint8_t yellowR,
+    uint8_t yellowG,
+    uint8_t yellowB) {
+  setPixel(redLed, redR, redG, redB);
+  setPixel(greenLed, greenR, greenG, greenB);
+  setPixel(yellowLed, yellowR, yellowG, yellowB);
+  refreshAll();
 }
 
 }  // namespace
 
 void LedController::begin() {
-  FastLED.addLeds<WS2812B, RED_LED_PIN, GRB>(redLed, LEDS_PER_CHANNEL);
-  FastLED.addLeds<WS2812B, GREEN_LED_PIN, GRB>(greenLed, LEDS_PER_CHANNEL);
-  FastLED.addLeds<WS2812B, YELLOW_LED_PIN, GRB>(yellowLed, LEDS_PER_CHANNEL);
-
-  FastLED.setBrightness(DEFAULT_BRIGHTNESS);
+  redLed.begin();
+  greenLed.begin();
+  yellowLed.begin();
+  setBrightness(DEFAULT_BRIGHTNESS);
   allOff();
 }
 
 void LedController::showRed() {
-  redLed[0] = RED_COLOR;
-  greenLed[0] = CRGB::Black;
-  yellowLed[0] = CRGB::Black;
-  FastLED.show();
+  setState(RED_COLOR_R, RED_COLOR_G, RED_COLOR_B, 0, 0, 0, 0, 0, 0);
 }
 
 void LedController::showGreen() {
-  redLed[0] = CRGB::Black;
-  greenLed[0] = GREEN_COLOR;
-  yellowLed[0] = CRGB::Black;
-  FastLED.show();
+  setState(0, 0, 0, GREEN_COLOR_R, GREEN_COLOR_G, GREEN_COLOR_B, 0, 0, 0);
 }
 
 void LedController::showYellow() {
-  redLed[0] = CRGB::Black;
-  greenLed[0] = CRGB::Black;
-  yellowLed[0] = YELLOW_COLOR;
-  FastLED.show();
+  setState(0, 0, 0, 0, 0, 0, YELLOW_COLOR_R, YELLOW_COLOR_G, YELLOW_COLOR_B);
 }
 
 void LedController::redOn() {
-  setLed(redLed, RED_COLOR);
+  setPixel(redLed, RED_COLOR_R, RED_COLOR_G, RED_COLOR_B);
+  redLed.show();
 }
 
 void LedController::redOff() {
-  clearLed(redLed);
+  clearPixel(redLed);
+  redLed.show();
 }
 
 void LedController::greenOn() {
-  setLed(greenLed, GREEN_COLOR);
+  setPixel(greenLed, GREEN_COLOR_R, GREEN_COLOR_G, GREEN_COLOR_B);
+  greenLed.show();
 }
 
 void LedController::greenOff() {
-  clearLed(greenLed);
+  clearPixel(greenLed);
+  greenLed.show();
 }
 
 void LedController::yellowOn() {
-  setLed(yellowLed, YELLOW_COLOR);
+  setPixel(yellowLed, YELLOW_COLOR_R, YELLOW_COLOR_G, YELLOW_COLOR_B);
+  yellowLed.show();
 }
 
 void LedController::yellowOff() {
-  clearLed(yellowLed);
+  clearPixel(yellowLed);
+  yellowLed.show();
 }
 
 void LedController::allOn() {
-  redLed[0] = RED_COLOR;
-  greenLed[0] = GREEN_COLOR;
-  yellowLed[0] = YELLOW_COLOR;
-  FastLED.show();
+  setState(
+      RED_COLOR_R, RED_COLOR_G, RED_COLOR_B,
+      GREEN_COLOR_R, GREEN_COLOR_G, GREEN_COLOR_B,
+      YELLOW_COLOR_R, YELLOW_COLOR_G, YELLOW_COLOR_B);
 }
 
 void LedController::allOff() {
-  redLed[0] = CRGB::Black;
-  greenLed[0] = CRGB::Black;
-  yellowLed[0] = CRGB::Black;
-  FastLED.show();
+  setState(0, 0, 0, 0, 0, 0, 0, 0, 0);
 }
 
-void LedController::setBrightness(uint8_t brightness) {
-  FastLED.setBrightness(brightness);
-  FastLED.show();
+void LedController::setBrightness(uint8_t value) {
+  brightness = value;
+  redLed.setBrightness(brightness);
+  greenLed.setBrightness(brightness);
+  yellowLed.setBrightness(brightness);
+  refreshAll();
 }

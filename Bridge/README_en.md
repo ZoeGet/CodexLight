@@ -12,7 +12,7 @@ The Bridge runs on the Windows computer hosting Codex Desktop. It continuously r
 | A tool call requires approval, permission, or user input | `YELLOW` |
 | `task_complete` or `turn_aborted` | `GREEN` |
 
-An active task does not turn green because of an ordinary `item/completed` event or a short period without logs.
+An active task does not turn green because of an ordinary `item/completed` event or a short period without logs. After detecting an approval request, the Bridge latches `YELLOW` against parallel tool calls, unrelated tool outputs, and SQLite diagnostics until the matching approval call returns. After `task_complete` or `turn_aborted`, the Bridge latches `GREEN` and ignores trailing log or diagnostic events from the completed turn until the next `task_started` or `user_message`.
 
 ## Requirements
 
@@ -41,7 +41,7 @@ Automatic selection of common ESP32 serial ports:
 python Bridge\codex_light_monitor.py --serial auto --baud 115200
 ```
 
-After opening the port, the Bridge waits two seconds. When only serial is enabled, it sends `MODE WIRED` so the firmware accepts wired states. It then repeats the current state every two seconds as a heartbeat.
+After opening the port, the Bridge waits two seconds. When only serial is enabled, it retries `MODE WIRED` until the ESP32 replies with `MODE_OK WIRED`, ensuring that the firmware has switched modes and accepts wired states. It then repeats the current state every two seconds as a heartbeat.
 
 ### Wireless UDP
 
@@ -75,13 +75,21 @@ Double-click:
 Bridge\start_codex_light_tray.bat
 ```
 
-Default arguments:
+Double-clicking selects `AUTO`, enabling automatic serial and UDP while firmware prefers a valid wired connection. A mode can also be selected explicitly from PowerShell:
 
-```text
---serial auto --baud 115200 --udp --udp-port 4210
+```powershell
+Bridge\start_codex_light_tray.bat auto
+Bridge\start_codex_light_tray.bat wired
+Bridge\start_codex_light_tray.bat wireless
 ```
 
-The tray menu can open `Bridge/logs`, restart the Bridge, or exit. Edit `MONITOR_ARGS` in `start_codex_light_tray.bat` for serial-only or UDP-only operation.
+| Mode | Bridge arguments | Behavior |
+| --- | --- | --- |
+| `auto` | Serial + UDP | Default; firmware prefers a fresh wired connection |
+| `wired` | Serial only | Bridge sends and confirms `MODE WIRED` |
+| `wireless` | UDP states; serial setup only | With USB available, saves `MODE WIRELESS` and immediately releases serial; otherwise uses the saved firmware mode |
+
+Serial port, baud rate, and UDP port are configured at the top of the batch file through `SERIAL_PORT`, `SERIAL_BAUD`, and `UDP_PORT`. The tray tooltip and status row display the selected mode. The `Connection mode` submenu switches directly between `Auto`, `Wired only`, and `Wireless only`, restarting the Bridge automatically. In wireless mode, an available USB connection is used only to complete the `MODE WIRELESS` handshake; serial is then closed and state traffic continues over UDP. The tray menu can also open `Bridge/logs`, restart the Bridge, or exit.
 
 ## Common Options
 
@@ -90,6 +98,8 @@ The tray menu can open `Bridge/logs`, restart the Bridge, or exit. Edit `MONITOR
 | `--serial COM4` | disabled | Use a specific serial port |
 | `--serial auto` | disabled | Select a common ESP32/USB serial device automatically |
 | `--baud` | `115200` | Serial baud rate |
+| `--firmware-mode` | inferred | Negotiate `AUTO`, `WIRED`, or `WIRELESS` over serial |
+| `--serial-setup-only` | disabled | Use serial only to save mode, then release it after acknowledgement |
 | `--udp` | disabled | Enable UDP state output and discovery |
 | `--udp-host` | `255.255.255.255` | UDP target before discovery |
 | `--udp-port` | `4210` | UDP port |

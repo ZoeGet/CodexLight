@@ -14,11 +14,9 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import socket
 import sqlite3
-import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -30,6 +28,7 @@ STATE_RED = "RED"
 STATE_YELLOW = "YELLOW"
 DEFAULT_CONFIG_PATH = Path(__file__).with_name("config.local.json")
 SERIAL_READY_DELAY_SECONDS = 2.0
+SERIAL_MODE_RETRY_SECONDS = 1.0
 
 
 @dataclass
@@ -41,6 +40,7 @@ class MonitorState:
     pending_calls: Dict[str, str] = field(default_factory=dict)
     pending_approvals: Dict[str, str] = field(default_factory=dict)
     active_turn_id: Optional[str] = None
+    completion_latched: bool = False
 
 
 class StateEmitter:
@@ -57,6 +57,8 @@ class StateEmitter:
         device_ip: str,
         config_path: Path,
         config: dict,
+        firmware_mode: str = "",
+        serial_setup_only: bool = False,
     ) -> None:
         self.repeat = repeat
         self.last_state: Optional[str] = None
@@ -78,18 +80,32 @@ class StateEmitter:
         self.last_udp_send = 0.0
         self.last_serial_send = 0.0
         self.last_udp_listen = 0.0
+        self.serial_mode = firmware_mode or ("AUTO" if self.udp_enabled else "WIRED")
+        self.serial_setup_only = serial_setup_only
+        self.serial_setup_complete = False
+        self.serial_mode_confirmed = False
+        self.last_serial_mode_send = 0.0
 
         if serial_port:
             try:
                 import serial  # type: ignore
                 from serial.tools import list_ports  # type: ignore
             except ImportError as exc:
-                raise SystemExit(
-                    "pyserial is required for --serial. Install it with: pip install pyserial"
-                ) from exc
-            self.serial_module = serial
-            self.list_ports_module = list_ports
-            self.connect_serial(force=True)
+                if self.serial_setup_only and self.udp_enabled:
+                    print(
+                        f"{time.strftime('%Y-%m-%d %H:%M:%S')} "
+                        "SERIAL setup unavailable; using saved firmware mode.",
+                        flush=True,
+                    )
+                    self.serial_port = None
+                else:
+                    raise SystemExit(
+                        "pyserial is required for --serial. Install it with: pip install pyserial"
+                    ) from exc
+            else:
+                self.serial_module = serial
+                self.list_ports_module = list_ports
+                self.connect_serial(force=True)
 
         if self.udp_enabled:
             self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -103,6 +119,8 @@ class StateEmitter:
 
     def connect_serial(self, force: bool = False) -> None:
         if not self.serial_port or self.serial_module is None:
+            return
+        if self.serial_setup_only and self.serial_setup_complete:
             return
 
         now = time.monotonic()
@@ -122,10 +140,10 @@ class StateEmitter:
             self.serial = self.serial_module.Serial(port, baudrate=self.baud, timeout=1)
             print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} SERIAL connected {port}", flush=True)
             time.sleep(SERIAL_READY_DELAY_SECONDS)
-            mode_command = b"MODE AUTO\n" if self.udp_enabled else b"MODE WIRED\n"
-            self.serial.write(mode_command)
-            self.serial.flush()
-            if self.last_state:
+            self.serial_mode_confirmed = False
+            self.last_serial_mode_send = 0.0
+            self.service_serial()
+            if self.last_state and not self.serial_setup_only:
                 self.serial.write((self.last_state + "\n").encode("ascii"))
                 self.serial.flush()
                 self.last_serial_send = time.monotonic()
@@ -193,10 +211,48 @@ class StateEmitter:
         except Exception:
             pass
         self.serial = None
+        self.serial_mode_confirmed = False
+
+    def service_serial(self) -> None:
+        if self.serial is None:
+            return
+
+        try:
+            while self.serial.in_waiting > 0:
+                line = self.serial.readline().decode("utf-8", errors="replace").strip()
+                if not line:
+                    continue
+                if line == f"MODE_OK {self.serial_mode}":
+                    self.serial_mode_confirmed = True
+                    if self.serial_setup_only:
+                        self.serial_setup_complete = True
+                if line.startswith(("MODE_OK ", "STATE_OK ", "STATUS ", "PONG")):
+                    print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} DEVICE {line}", flush=True)
+
+            if self.serial_setup_only and self.serial_setup_complete:
+                self.close_serial()
+                return
+
+            now = time.monotonic()
+            if (
+                not self.serial_mode_confirmed
+                and now - self.last_serial_mode_send >= SERIAL_MODE_RETRY_SECONDS
+            ):
+                self.serial.write(f"MODE {self.serial_mode}\n".encode("ascii"))
+                self.serial.flush()
+                self.last_serial_mode_send = now
+        except Exception as exc:
+            print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} SERIAL read failed: {exc}", flush=True)
+            self.close_serial()
 
     def emit(self, state: str, reason: str) -> None:
         state_changed = state != self.last_state
         now = time.monotonic()
+
+        if self.serial_port:
+            self.connect_serial()
+            self.service_serial()
+
         should_repeat_udp = (
             self.udp_enabled
             and self.last_state is not None
@@ -204,6 +260,7 @@ class StateEmitter:
         )
         should_repeat_serial = (
             self.serial_port
+            and not self.serial_setup_only
             and self.last_state is not None
             and now - self.last_serial_send >= self.udp_interval
         )
@@ -217,10 +274,11 @@ class StateEmitter:
         if self.repeat or state_changed:
             print(line, flush=True)
 
-        if self.serial_port:
-            self.connect_serial()
-
-        if self.serial is not None and (self.repeat or state_changed or should_repeat_serial):
+        if (
+            self.serial is not None
+            and not self.serial_setup_only
+            and (self.repeat or state_changed or should_repeat_serial)
+        ):
             try:
                 self.serial.write((state + "\n").encode("ascii"))
                 self.serial.flush()
@@ -407,6 +465,7 @@ def handle_session_event(ms: MonitorState, event: dict) -> None:
     payload_type = payload.get("type")
 
     if event_type == "event_msg" and payload_type == "task_started":
+        ms.completion_latched = False
         ms.active_turn_id = payload.get("turn_id")
         set_state(ms, STATE_RED, "task_started")
         return
@@ -415,6 +474,7 @@ def handle_session_event(ms: MonitorState, event: dict) -> None:
         ms.pending_calls.clear()
         ms.pending_approvals.clear()
         ms.active_turn_id = None
+        ms.completion_latched = True
         set_state(ms, STATE_GREEN, "turn_aborted")
         return
 
@@ -422,11 +482,18 @@ def handle_session_event(ms: MonitorState, event: dict) -> None:
         ms.pending_calls.clear()
         ms.pending_approvals.clear()
         ms.active_turn_id = None
+        ms.completion_latched = True
         set_state(ms, STATE_GREEN, "task_complete")
         return
 
     if event_type == "event_msg" and payload_type == "user_message":
+        ms.completion_latched = False
         set_state(ms, STATE_RED, "user_message")
+        return
+
+    # Codex can append token, message, tool-output, or diagnostic events after
+    # the terminal event. Keep completed GREEN latched until a new turn starts.
+    if ms.completion_latched:
         return
 
     if event_type == "event_msg" and payload_type in {"agent_message", "agent_reasoning", "token_count"}:
@@ -445,20 +512,22 @@ def handle_session_event(ms: MonitorState, event: dict) -> None:
         if contains_approval_request(payload):
             ms.pending_approvals[call_id] = name
             set_state(ms, STATE_YELLOW, f"approval_needed:{name}")
-        else:
+        elif not ms.pending_approvals:
             set_state(ms, STATE_RED, f"tool_call:{name}")
         return
 
     if payload_type == "function_call_output":
         call_id = str(payload.get("call_id") or "unknown")
         name = ms.pending_calls.pop(call_id, "tool")
-        ms.pending_approvals.pop(call_id, None)
+        was_approval = ms.pending_approvals.pop(call_id, None) is not None
 
         output = str(payload.get("output") or "")
-        if "process exited with code 1" in output.lower() or "error" in output.lower():
-            set_state(ms, STATE_RED, f"tool_output_error:{name}")
-        elif ms.pending_approvals:
+        if ms.pending_approvals:
             set_state(ms, STATE_YELLOW, "approval_pending")
+        elif "process exited with code 1" in output.lower() or "error" in output.lower():
+            set_state(ms, STATE_RED, f"tool_output_error:{name}")
+        elif was_approval:
+            set_state(ms, STATE_RED, f"approval_resolved:{name}")
         else:
             set_state(ms, STATE_RED, f"tool_output:{name}")
         return
@@ -491,7 +560,7 @@ def sqlite_max_id(con: sqlite3.Connection) -> int:
 def handle_sqlite_logs(ms: MonitorState, con: sqlite3.Connection, last_id: int) -> int:
     try:
         rows = con.execute(
-            "select id, level, target, feedback_log_body from logs "
+            "select id, level, target from logs "
             "where id > ? order by id asc limit 500",
             (last_id,),
         ).fetchall()
@@ -501,17 +570,16 @@ def handle_sqlite_logs(ms: MonitorState, con: sqlite3.Connection, last_id: int) 
     for row in rows:
         last_id = max(last_id, int(row["id"]))
         level = str(row["level"] or "")
-        body = str(row["feedback_log_body"] or "")
         target = str(row["target"] or "")
 
-        if level == "ERROR":
+        if level == "ERROR" and not ms.completion_latched and not ms.pending_approvals:
             set_state(ms, STATE_RED, f"sqlite_error:{target}")
             continue
 
     return last_id
 
 
-def apply_idle_rules(ms: MonitorState, quiet_timeout: float, complete_grace: float) -> None:
+def apply_idle_rules(ms: MonitorState, quiet_timeout: float) -> None:
     now = time.monotonic()
 
     if ms.pending_approvals:
@@ -555,6 +623,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--from-start", action="store_true", help="Process existing JSONL content.")
     parser.add_argument("--serial", help="Optional serial port, for example COM5, or auto.")
     parser.add_argument("--baud", type=int, default=115200)
+    parser.add_argument(
+        "--firmware-mode",
+        choices=("AUTO", "WIRED", "WIRELESS"),
+        default="",
+        help="Transport mode negotiated over serial. Defaults from enabled outputs.",
+    )
+    parser.add_argument(
+        "--serial-setup-only",
+        action="store_true",
+        help="Use serial only to save firmware mode, then release the port.",
+    )
     parser.add_argument("--udp", action="store_true", help="Broadcast states over UDP.")
     parser.add_argument("--udp-host", default="255.255.255.255", help="UDP host or broadcast address.")
     parser.add_argument("--udp-port", type=int, default=4210, help="UDP destination port.")
@@ -587,6 +666,8 @@ def main() -> int:
         device_ip,
         args.config,
         config,
+        args.firmware_mode,
+        args.serial_setup_only,
     )
     ms = MonitorState()
     offsets: Dict[Path, int] = {}
@@ -609,7 +690,7 @@ def main() -> int:
         else:
             last_sqlite_id = handle_sqlite_logs(ms, con, last_sqlite_id)
 
-        apply_idle_rules(ms, args.quiet_timeout, args.complete_grace)
+        apply_idle_rules(ms, args.quiet_timeout)
         emitter.emit(ms.state, ms.reason)
         time.sleep(args.poll)
 

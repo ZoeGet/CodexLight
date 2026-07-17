@@ -1,7 +1,11 @@
 param(
   [string]$Python = "",
-  [string]$MonitorArgs = "",
-  [string]$WorkDir = ""
+  [string]$WorkDir = "",
+  [ValidateSet("AUTO", "WIRED", "WIRELESS")]
+  [string]$ConnectionMode = "AUTO",
+  [string]$SerialPort = "auto",
+  [int]$SerialBaud = 115200,
+  [int]$UdpPort = 4210
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,27 +49,38 @@ function Resolve-PythonPath {
   throw "Python was not found. Install Python or pass -Python C:\path\to\pythonw.exe."
 }
 
-function Split-Args {
-  param([string]$Text)
-
-  if ([string]::IsNullOrWhiteSpace($Text)) {
-    return @()
-  }
-
-  $matches = [regex]::Matches($Text, '"([^"\\]*(?:\\.[^"\\]*)*)"|(\S+)')
-  $items = New-Object System.Collections.Generic.List[string]
-  foreach ($match in $matches) {
-    if ($match.Groups[1].Success) {
-      $items.Add($match.Groups[1].Value.Replace('\"', '"'))
-    } else {
-      $items.Add($match.Groups[2].Value)
-    }
-  }
-  return $items.ToArray()
-}
-
 $pythonPath = Resolve-PythonPath -Requested $Python
 $monitorProcess = $null
+$currentMode = $ConnectionMode
+
+function Get-MonitorArguments {
+  switch ($script:currentMode) {
+    "WIRED" {
+      return @(
+        "--serial", $SerialPort,
+        "--baud", $SerialBaud.ToString(),
+        "--firmware-mode", "WIRED"
+      )
+    }
+    "WIRELESS" {
+      return @(
+        "--serial", $SerialPort,
+        "--baud", $SerialBaud.ToString(),
+        "--udp", "--udp-port", $UdpPort.ToString(),
+        "--firmware-mode", "WIRELESS",
+        "--serial-setup-only"
+      )
+    }
+    default {
+      return @(
+        "--serial", $SerialPort,
+        "--baud", $SerialBaud.ToString(),
+        "--udp", "--udp-port", $UdpPort.ToString(),
+        "--firmware-mode", "AUTO"
+      )
+    }
+  }
+}
 
 function Start-Monitor {
   if ($script:monitorProcess -and -not $script:monitorProcess.HasExited) {
@@ -74,7 +89,7 @@ function Start-Monitor {
 
   $args = New-Object System.Collections.Generic.List[string]
   $args.Add($monitorScript)
-  foreach ($arg in (Split-Args -Text $MonitorArgs)) {
+  foreach ($arg in (Get-MonitorArguments)) {
     $args.Add($arg)
   }
 
@@ -105,17 +120,54 @@ function Restart-Monitor {
   Start-Monitor
 }
 
+function Update-ModeDisplay {
+  $notifyIcon.Text = "CodexLight Bridge ($script:currentMode)"
+  $statusItem.Text = "CodexLight Bridge: $script:currentMode"
+  $autoModeItem.Checked = $script:currentMode -eq "AUTO"
+  $wiredModeItem.Checked = $script:currentMode -eq "WIRED"
+  $wirelessModeItem.Checked = $script:currentMode -eq "WIRELESS"
+}
+
+function Set-ConnectionMode {
+  param([ValidateSet("AUTO", "WIRED", "WIRELESS")][string]$Mode)
+
+  if ($script:currentMode -eq $Mode) {
+    return
+  }
+  $script:currentMode = $Mode
+  Update-ModeDisplay
+  Restart-Monitor
+}
+
 $notifyIcon = New-Object System.Windows.Forms.NotifyIcon
 $notifyIcon.Icon = [System.Drawing.SystemIcons]::Application
-$notifyIcon.Text = "CodexLight Bridge"
 $notifyIcon.Visible = $true
 
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
 
 $statusItem = New-Object System.Windows.Forms.ToolStripMenuItem
-$statusItem.Text = "CodexLight Bridge running"
 $statusItem.Enabled = $false
 [void]$menu.Items.Add($statusItem)
+
+$modeMenu = New-Object System.Windows.Forms.ToolStripMenuItem
+$modeMenu.Text = "Connection mode"
+
+$autoModeItem = New-Object System.Windows.Forms.ToolStripMenuItem
+$autoModeItem.Text = "Auto (wired + wireless)"
+$autoModeItem.Add_Click({ Set-ConnectionMode -Mode "AUTO" })
+[void]$modeMenu.DropDownItems.Add($autoModeItem)
+
+$wiredModeItem = New-Object System.Windows.Forms.ToolStripMenuItem
+$wiredModeItem.Text = "Wired only"
+$wiredModeItem.Add_Click({ Set-ConnectionMode -Mode "WIRED" })
+[void]$modeMenu.DropDownItems.Add($wiredModeItem)
+
+$wirelessModeItem = New-Object System.Windows.Forms.ToolStripMenuItem
+$wirelessModeItem.Text = "Wireless only"
+$wirelessModeItem.Add_Click({ Set-ConnectionMode -Mode "WIRELESS" })
+[void]$modeMenu.DropDownItems.Add($wirelessModeItem)
+
+[void]$menu.Items.Add($modeMenu)
 
 $openLogItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $openLogItem.Text = "Open log folder"
@@ -142,7 +194,7 @@ $exitItem.Add_Click({
 $notifyIcon.ContextMenuStrip = $menu
 $notifyIcon.Add_DoubleClick({ Start-Process explorer.exe $logDir })
 
+Update-ModeDisplay
 Start-Monitor
 
 [System.Windows.Forms.Application]::Run()
-

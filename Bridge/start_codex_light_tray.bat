@@ -1,10 +1,36 @@
 @echo off
 setlocal
 
-rem Enable both connection methods by default.
-rem Wired USB serial: --serial auto --baud 115200
-rem Wireless UDP:     --udp --udp-port 4210, device IP learned from HELLO discovery
-rem Remove either part if you only want one connection method.
-set "MONITOR_ARGS=--serial auto --baud 115200 --udp --udp-port 4210"
+rem User configuration.
+set "SERIAL_PORT=auto"
+set "SERIAL_BAUD=115200"
+set "UDP_PORT=4210"
 
-start "CodexLight Bridge" powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0CodexLightTray.ps1" -MonitorArgs "%MONITOR_ARGS%"
+rem Start modes:
+rem   double-click or auto: serial + UDP, with wired preferred by firmware
+rem   wired:               serial only
+rem   wireless:            UDP states; serial is released after MODE WIRELESS setup
+set "CONNECTION_MODE=%~1"
+if not defined CONNECTION_MODE set "CONNECTION_MODE=auto"
+
+if /I "%CONNECTION_MODE%"=="auto" (
+  set "DISPLAY_MODE=AUTO"
+  goto launch
+)
+
+if /I "%CONNECTION_MODE%"=="wired" (
+  set "DISPLAY_MODE=WIRED"
+  goto launch
+)
+
+if /I "%CONNECTION_MODE%"=="wireless" (
+  set "DISPLAY_MODE=WIRELESS"
+  goto launch
+)
+
+echo Invalid connection mode: %CONNECTION_MODE%
+echo Usage: %~nx0 [auto^|wired^|wireless]
+exit /b 2
+
+:launch
+start "CodexLight Bridge" powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0CodexLightTray.ps1" -ConnectionMode "%DISPLAY_MODE%" -SerialPort "%SERIAL_PORT%" -SerialBaud %SERIAL_BAUD% -UdpPort %UDP_PORT%

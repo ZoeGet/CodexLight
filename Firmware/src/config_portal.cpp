@@ -18,7 +18,7 @@ void ConfigPortal::begin() {
 
   std::vector<const char*> menu = {"wifi", "exit"};
   manager_.setMenu(menu);
-  manager_.setDebugOutput(DEBUG_SERIAL);
+  manager_.setDebugOutput(false);
   manager_.setConfigPortalBlocking(false);
   manager_.setHostname(apSsid_);
   manager_.setConfigPortalTimeout(0);

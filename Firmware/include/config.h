@@ -19,6 +19,7 @@ constexpr unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000;
 constexpr unsigned long DISCONNECTED_BLINK_HALF_PERIOD_MS = 500;
 constexpr unsigned long CONNECTED_ANIMATION_MS = 2000;
 constexpr unsigned long CONNECTED_BLINK_HALF_PERIOD_MS = 250;
+constexpr unsigned long LED_REFRESH_INTERVAL_MS = 1000;
 
 // AP provisioning hotspot settings. The actual SSID is
 // CONFIG_AP_SSID_PREFIX plus the last bytes of the ESP32 MAC address, for

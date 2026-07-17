@@ -11,18 +11,9 @@ class LedController {
   void showGreen();
   void showYellow();
 
-  void redOn();
-  void redOff();
-
-  void greenOn();
-  void greenOff();
-
-  void yellowOn();
-  void yellowOff();
-
-  void allOn();
   void allOff();
 
+ private:
   void setBrightness(uint8_t brightness);
 };
 

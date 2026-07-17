@@ -5,6 +5,8 @@
 !.gitignore
 !README.md
 !README.en.md
+!USAGE.md
+!USAGE.en.md
 !LICENSE
 
 # Keep the project directories that should be uploaded.
@@ -21,6 +23,8 @@
 .pio/
 .vscode/
 **/.pio/
+**/.pio-codex-build/
 **/.vscode/
 Firmware/include/wifi_secrets.h
 Bridge/config.local.json
+Bridge/logs/

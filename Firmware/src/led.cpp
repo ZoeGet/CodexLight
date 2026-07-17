@@ -18,10 +18,6 @@ void setPixel(Adafruit_NeoPixel& led, uint8_t red, uint8_t green, uint8_t blue) 
   led.setPixelColor(0, led.Color(red, green, blue));
 }
 
-void clearPixel(Adafruit_NeoPixel& led) {
-  setPixel(led, 0, 0, 0);
-}
-
 void refreshAll() {
   redLed.show();
   greenLed.show();
@@ -64,43 +60,6 @@ void LedController::showGreen() {
 
 void LedController::showYellow() {
   setState(0, 0, 0, 0, 0, 0, YELLOW_COLOR_R, YELLOW_COLOR_G, YELLOW_COLOR_B);
-}
-
-void LedController::redOn() {
-  setPixel(redLed, RED_COLOR_R, RED_COLOR_G, RED_COLOR_B);
-  redLed.show();
-}
-
-void LedController::redOff() {
-  clearPixel(redLed);
-  redLed.show();
-}
-
-void LedController::greenOn() {
-  setPixel(greenLed, GREEN_COLOR_R, GREEN_COLOR_G, GREEN_COLOR_B);
-  greenLed.show();
-}
-
-void LedController::greenOff() {
-  clearPixel(greenLed);
-  greenLed.show();
-}
-
-void LedController::yellowOn() {
-  setPixel(yellowLed, YELLOW_COLOR_R, YELLOW_COLOR_G, YELLOW_COLOR_B);
-  yellowLed.show();
-}
-
-void LedController::yellowOff() {
-  clearPixel(yellowLed);
-  yellowLed.show();
-}
-
-void LedController::allOn() {
-  setState(
-      RED_COLOR_R, RED_COLOR_G, RED_COLOR_B,
-      GREEN_COLOR_R, GREEN_COLOR_G, GREEN_COLOR_B,
-      YELLOW_COLOR_R, YELLOW_COLOR_G, YELLOW_COLOR_B);
 }
 
 void LedController::allOff() {

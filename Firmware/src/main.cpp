@@ -55,6 +55,7 @@ bool linkWasConnected = false;
 bool connectionAnimationActive = false;
 unsigned long connectionAnimationStartedMs = 0;
 LedFrame displayedFrame = LedFrame::Off;
+unsigned long lastLedRefreshMs = 0;
 
 void debugPrint(const String& message) {
   if (!DEBUG_SERIAL) {
@@ -88,6 +89,18 @@ const char* transportName(Transport transport) {
       return "NONE";
   }
   return "NONE";
+}
+
+const char* stateName(LightState state) {
+  switch (state) {
+    case LightState::Green:
+      return "GREEN";
+    case LightState::Red:
+      return "RED";
+    case LightState::Yellow:
+      return "YELLOW";
+  }
+  return "GREEN";
 }
 
 TransportMode parseMode(String value) {
@@ -128,8 +141,10 @@ bool parseState(String command, LightState& state) {
   return false;
 }
 
-void showFrame(LedFrame frame) {
-  if (frame == displayedFrame) {
+void showFrame(LedFrame frame, unsigned long now) {
+  const bool frameChanged = frame != displayedFrame;
+  const bool refreshDue = now - lastLedRefreshMs >= LED_REFRESH_INTERVAL_MS;
+  if (!frameChanged && !refreshDue) {
     return;
   }
 
@@ -148,18 +163,19 @@ void showFrame(LedFrame frame) {
       break;
   }
   displayedFrame = frame;
+  lastLedRefreshMs = now;
 }
 
-void showState(LightState state) {
+void showState(LightState state, unsigned long now) {
   switch (state) {
     case LightState::Green:
-      showFrame(LedFrame::Green);
+      showFrame(LedFrame::Green, now);
       break;
     case LightState::Red:
-      showFrame(LedFrame::Red);
+      showFrame(LedFrame::Red, now);
       break;
     case LightState::Yellow:
-      showFrame(LedFrame::Yellow);
+      showFrame(LedFrame::Yellow, now);
       break;
   }
 }
@@ -241,7 +257,6 @@ void handleControlCommand(String command) {
     Serial.println(String("WIFI_CLEARED ") + configPortal.apSsid() + " 192.168.4.1");
     return;
   }
-
   LightState state;
   if (upper == "PING") {
     lastWiredPacketMs = millis();
@@ -251,6 +266,7 @@ void handleControlCommand(String command) {
   if (parseState(upper, state)) {
     wiredState = state;
     lastWiredPacketMs = millis();
+    Serial.println(String("STATE_OK ") + stateName(state));
   }
 }
 
@@ -353,9 +369,9 @@ void updateLeds() {
   if (!connected) {
     const bool on = (now / DISCONNECTED_BLINK_HALF_PERIOD_MS) % 2 == 0;
     if (on) {
-      showFrame(LedFrame::Yellow);
+      showFrame(LedFrame::Yellow, now);
     } else {
-      showFrame(LedFrame::Off);
+      showFrame(LedFrame::Off, now);
     }
     return;
   }
@@ -365,16 +381,16 @@ void updateLeds() {
       const bool on = ((now - connectionAnimationStartedMs) /
                        CONNECTED_BLINK_HALF_PERIOD_MS) % 2 == 0;
       if (on) {
-        showFrame(LedFrame::Green);
+        showFrame(LedFrame::Green, now);
       } else {
-        showFrame(LedFrame::Off);
+        showFrame(LedFrame::Off, now);
       }
       return;
     }
     connectionAnimationActive = false;
   }
 
-  showState(activeTransport == Transport::Wired ? wiredState : wirelessState);
+  showState(activeTransport == Transport::Wired ? wiredState : wirelessState, now);
 }
 
 }  // namespace
@@ -389,7 +405,7 @@ void setup() {
   loadMode();
   configPortal.begin();
   debugPrint(String("Boot mode=") + modeName(transportMode));
-  debugPrint(String("Config AP=") + configPortal.apSsid() + " password=" + CONFIG_AP_PASSWORD);
+  debugPrint(String("Config AP=") + configPortal.apSsid());
   printStatus();
 }
 

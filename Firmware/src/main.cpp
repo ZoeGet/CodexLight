@@ -29,6 +29,13 @@ enum class LightState {
   Yellow,
 };
 
+enum class LedFrame {
+  Off,
+  Green,
+  Red,
+  Yellow,
+};
+
 LedController leds;
 ConfigPortal configPortal;
 Preferences preferences;
@@ -47,6 +54,7 @@ unsigned long lastHelloMs = 0;
 bool linkWasConnected = false;
 bool connectionAnimationActive = false;
 unsigned long connectionAnimationStartedMs = 0;
+LedFrame displayedFrame = LedFrame::Off;
 
 void debugPrint(const String& message) {
   if (!DEBUG_SERIAL) {
@@ -120,16 +128,38 @@ bool parseState(String command, LightState& state) {
   return false;
 }
 
+void showFrame(LedFrame frame) {
+  if (frame == displayedFrame) {
+    return;
+  }
+
+  switch (frame) {
+    case LedFrame::Off:
+      leds.allOff();
+      break;
+    case LedFrame::Green:
+      leds.showGreen();
+      break;
+    case LedFrame::Red:
+      leds.showRed();
+      break;
+    case LedFrame::Yellow:
+      leds.showYellow();
+      break;
+  }
+  displayedFrame = frame;
+}
+
 void showState(LightState state) {
   switch (state) {
     case LightState::Green:
-      leds.showGreen();
+      showFrame(LedFrame::Green);
       break;
     case LightState::Red:
-      leds.showRed();
+      showFrame(LedFrame::Red);
       break;
     case LightState::Yellow:
-      leds.showYellow();
+      showFrame(LedFrame::Yellow);
       break;
   }
 }
@@ -323,9 +353,9 @@ void updateLeds() {
   if (!connected) {
     const bool on = (now / DISCONNECTED_BLINK_HALF_PERIOD_MS) % 2 == 0;
     if (on) {
-      leds.showYellow();
+      showFrame(LedFrame::Yellow);
     } else {
-      leds.allOff();
+      showFrame(LedFrame::Off);
     }
     return;
   }
@@ -335,9 +365,9 @@ void updateLeds() {
       const bool on = ((now - connectionAnimationStartedMs) /
                        CONNECTED_BLINK_HALF_PERIOD_MS) % 2 == 0;
       if (on) {
-        leds.showGreen();
+        showFrame(LedFrame::Green);
       } else {
-        leds.allOff();
+        showFrame(LedFrame::Off);
       }
       return;
     }

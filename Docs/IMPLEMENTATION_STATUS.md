@@ -87,6 +87,8 @@ The mode is stored in NVS using Preferences namespace `codexlight`, key `transpo
 
 The LED driver uses `NEO_GRB + NEO_KHZ800`, matching the reference project. Every state transition writes all three independent LED outputs so inactive LEDs are explicitly cleared.
 
+The firmware caches the last rendered LED frame. WS2812B data is sent only when the state or blink phase changes. A `task_complete` green frame therefore remains latched until a later `RED`, `YELLOW`, or disconnected frame replaces it.
+
 ## Wi-Fi Provisioning
 
 WiFiManager opens `CodexLight-XXXX` at `192.168.4.1` when no usable credentials exist. The current AP password is `123456789`.

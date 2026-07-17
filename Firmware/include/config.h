@@ -15,6 +15,20 @@ constexpr uint8_t DEFAULT_BRIGHTNESS = 64;
 constexpr unsigned long SERIAL_BAUD = 115200;
 constexpr uint16_t UDP_PORT = 4210;
 constexpr unsigned long WIRELESS_TIMEOUT_MS = 10000;
+constexpr unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000;
+constexpr unsigned long CONFIG_PORTAL_TIMEOUT_SECONDS = 180;
+
+// AP provisioning hotspot settings. The actual SSID is
+// CONFIG_AP_SSID_PREFIX plus the last bytes of the ESP32 MAC address, for
+// example CodexLight-A1B2.
+constexpr const char* CONFIG_AP_SSID_PREFIX = "CodexLight";
+constexpr const char* CONFIG_AP_PASSWORD = "123456789";
+constexpr uint16_t CONFIG_WEB_PORT = 80;
+
+// Enables firmware diagnostics on the USB serial port. Open the VS Code /
+// PlatformIO serial monitor at SERIAL_BAUD to inspect Wi-Fi, UDP, pairing,
+// token, and MAC status while debugging hardware setup.
+constexpr bool DEBUG_SERIAL = true;
 
 constexpr uint8_t RED_COLOR_R = 255;
 constexpr uint8_t RED_COLOR_G = 0;

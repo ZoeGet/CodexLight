@@ -30,6 +30,7 @@ STATE_GREEN = "GREEN"
 STATE_RED = "RED"
 STATE_YELLOW = "YELLOW"
 DEFAULT_CONFIG_PATH = Path(__file__).with_name("config.local.json")
+SERIAL_READY_DELAY_SECONDS = 2.0
 
 
 @dataclass
@@ -123,6 +124,7 @@ class StateEmitter:
         try:
             self.serial = self.serial_module.Serial(port, baudrate=self.baud, timeout=1)
             print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} SERIAL connected {port}", flush=True)
+            time.sleep(SERIAL_READY_DELAY_SECONDS)
             if self.last_state:
                 self.serial.write((self.last_state + "\n").encode("ascii"))
                 self.serial.flush()

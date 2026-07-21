@@ -562,7 +562,6 @@ void setup() {
 
   configPortal.begin();
   Serial.println("WIFI_PROVISIONING USB_SERIAL");
-  Serial.flush();
   configPortal.autoConnect();
   if (configPortal.wifiConnected()) {
     Serial.println(String("WIFI_CONNECTED ") + WiFi.SSID() + " " + WiFi.localIP().toString());

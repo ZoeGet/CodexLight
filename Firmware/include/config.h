@@ -38,7 +38,7 @@ constexpr const char* DEFAULT_TRANSPORT_MODE = "AUTO";
 // Enables firmware diagnostics on the USB serial port. Open the VS Code /
 // PlatformIO serial monitor at SERIAL_BAUD to inspect transport, Wi-Fi, UDP,
 // configuration portal, and MAC status while debugging hardware setup.
-constexpr bool DEBUG_SERIAL = true;
+constexpr bool DEBUG_SERIAL = false;
 
 constexpr uint8_t RED_COLOR_R = 255;
 constexpr uint8_t RED_COLOR_G = 0;

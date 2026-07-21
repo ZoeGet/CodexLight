@@ -56,6 +56,7 @@ bool connectionAnimationActive = false;
 unsigned long connectionAnimationStartedMs = 0;
 LedFrame displayedFrame = LedFrame::Off;
 unsigned long lastLedRefreshMs = 0;
+bool ledsInitialized = false;
 
 void debugPrint(const String& message) {
   if (!DEBUG_SERIAL) {
@@ -223,6 +224,44 @@ void printStatus() {
   Serial.print(transportName(activeTransport));
   Serial.print(" wifi=");
   Serial.print(configPortal.wifiConnected() ? "CONNECTED" : "DISCONNECTED");
+  Serial.print(" sta_status=");
+  Serial.print(configPortal.wifiStatusName());
+  Serial.print(" target_ssid=");
+  if (configPortal.configuredSsid().length() > 0) {
+    Serial.print(configPortal.configuredSsid());
+  } else {
+    Serial.print("NONE");
+  }
+  Serial.print(" disconnect_reason=");
+  Serial.print(configPortal.lastDisconnectReason());
+  Serial.print(" network=");
+  Serial.print(configPortal.stateName());
+  Serial.print(" radio=");
+  switch (WiFi.getMode()) {
+    case WIFI_MODE_NULL:
+      Serial.print("OFF");
+      break;
+    case WIFI_MODE_STA:
+      Serial.print("STA");
+      break;
+    case WIFI_MODE_AP:
+      Serial.print("AP");
+      break;
+    case WIFI_MODE_APSTA:
+      Serial.print("AP_STA");
+      break;
+    default:
+      Serial.print("UNKNOWN");
+      break;
+  }
+  if (configPortal.portalActive()) {
+    Serial.print(" ap=");
+    Serial.print(WiFi.softAPSSID());
+    Serial.print(" ap_ip=");
+    Serial.print(WiFi.softAPIP());
+    Serial.print(" ap_clients=");
+    Serial.print(WiFi.softAPgetStationNum());
+  }
   if (configPortal.wifiConnected()) {
     Serial.print(" ip=");
     Serial.print(WiFi.localIP());
@@ -248,13 +287,34 @@ void handleControlCommand(String command) {
     return;
   }
   if (upper == "WIFI_CONFIG") {
-    configPortal.start();
-    Serial.println(String("WIFI_PORTAL ") + configPortal.apSsid() + " 192.168.4.1");
+    Serial.println("WIFI_USB_PROVISIONING READY FORMAT=WIFI_SET <ssid><TAB><password>");
     return;
   }
   if (upper == "CLEAR_WIFI") {
     configPortal.resetSettings();
-    Serial.println(String("WIFI_CLEARED ") + configPortal.apSsid() + " 192.168.4.1");
+    Serial.println("WIFI_CLEARED USB_PROVISIONING");
+    return;
+  }
+  if (upper.startsWith("WIFI_SET ")) {
+    const int separator = command.indexOf('\t', 9);
+    if (separator < 0) {
+      Serial.println("WIFI_SET_ERROR FORMAT");
+      return;
+    }
+    String ssid = command.substring(9, separator);
+    const String password = command.substring(separator + 1);
+    ssid.trim();
+    if (ssid.length() == 0 || ssid.length() > 32 || password.length() > 64 ||
+        (password.length() > 0 && password.length() < 8)) {
+      Serial.println("WIFI_SET_ERROR INVALID_CREDENTIALS");
+      return;
+    }
+    configPortal.configure(ssid, password);
+    if (configPortal.wifiConnected()) {
+      Serial.println(String("WIFI_SET_OK ") + ssid + " " + WiFi.localIP().toString());
+    } else {
+      Serial.println(String("WIFI_SET_ERROR CONNECT_FAILED ") + ssid);
+    }
     return;
   }
   LightState state;
@@ -280,7 +340,7 @@ void handleSerialInput() {
       }
       continue;
     }
-    if (serialBuffer.length() < 96) {
+    if (serialBuffer.length() < 128) {
       serialBuffer += ch;
     } else {
       serialBuffer = "";
@@ -352,6 +412,10 @@ void maintainUdp() {
 }
 
 void updateLeds() {
+  if (!ledsInitialized) {
+    return;
+  }
+
   const unsigned long now = millis();
   activeTransport = selectActiveTransport(now);
   const bool connected = activeTransport != Transport::None;
@@ -393,6 +457,18 @@ void updateLeds() {
   showState(activeTransport == Transport::Wired ? wiredState : wirelessState, now);
 }
 
+void maintainLedController() {
+  if (ledsInitialized) {
+    return;
+  }
+
+  leds.begin();
+  ledsInitialized = true;
+  displayedFrame = LedFrame::Off;
+  lastLedRefreshMs = 0;
+  debugPrint("LED controller enabled after Wi-Fi provisioning");
+}
+
 }  // namespace
 
 void setup() {
@@ -401,17 +477,28 @@ void setup() {
   Serial.println();
   Serial.println("CODEXLIGHT READY");
 
-  leds.begin();
-  loadMode();
   configPortal.begin();
+  Serial.println("WIFI_PROVISIONING USB_SERIAL");
+  Serial.flush();
+  configPortal.autoConnect();
+  if (configPortal.wifiConnected()) {
+    Serial.println(String("WIFI_CONNECTED ") + WiFi.SSID() + " " + WiFi.localIP().toString());
+  } else {
+    Serial.println("WIFI_USB_PROVISIONING READY FORMAT=WIFI_SET <ssid><TAB><password>");
+  }
+
+  maintainLedController();
+
+  loadMode();
   debugPrint(String("Boot mode=") + modeName(transportMode));
   debugPrint(String("Config AP=") + configPortal.apSsid());
   printStatus();
 }
 
 void loop() {
+  configPortal.loop();
   handleSerialInput();
-  configPortal.process();
+  maintainLedController();
   maintainUdp();
   updateLeds();
   delay(2);

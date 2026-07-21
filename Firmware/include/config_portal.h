@@ -2,23 +2,35 @@
 #define CODEXLIGHT_CONFIG_PORTAL_H
 
 #include <Arduino.h>
-#include <WiFiManager.h>
+
+struct WifiCredentials;
 
 class ConfigPortal {
  public:
   void begin();
-  void process();
-  void start();
+  bool autoConnect();
+  bool start();
+  void loop();
   void resetSettings();
+  void configure(const String& ssid, const String& password);
+
   bool wifiConnected() const;
+  bool portalActive() const;
   const String& apSsid() const;
+  const String& configuredSsid() const;
+  const char* stateName() const;
+  const char* wifiStatusName() const;
+  uint8_t lastDisconnectReason() const;
 
  private:
-  WiFiManager manager_;
   String apSsid_;
+  String currentSsid_;
   bool initialized_ = false;
+  uint8_t lastDisconnectReason_ = 0;
 
   void buildApSsid();
+  bool connectTo(const String& ssid, const String& password);
+  bool loadCredentials(WifiCredentials& credentials);
 };
 
-#endif
+#endif  // CODEXLIGHT_CONFIG_PORTAL_H

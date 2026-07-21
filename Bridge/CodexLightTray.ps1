@@ -24,6 +24,27 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
 $stdoutLog = Join-Path $logDir "codex_light_monitor.out.log"
 $stderrLog = Join-Path $logDir "codex_light_monitor.err.log"
+$wifiSetupOutLog = Join-Path $logDir "wifi_setup.out.log"
+$wifiSetupErrLog = Join-Path $logDir "wifi_setup.err.log"
+
+function Get-RecentLogText {
+  param([string[]]$Paths)
+
+  $lines = New-Object System.Collections.Generic.List[string]
+  foreach ($path in $Paths) {
+    if (Test-Path $path) {
+      $lines.Add("--- $path ---")
+      foreach ($line in (Get-Content -LiteralPath $path -Tail 20 -ErrorAction SilentlyContinue)) {
+        $lines.Add($line)
+      }
+    }
+  }
+
+  if ($lines.Count -eq 0) {
+    return "No setup log was written."
+  }
+  return ($lines -join [Environment]::NewLine)
+}
 
 function Resolve-PythonPath {
   param([string]$Requested)
@@ -52,6 +73,109 @@ function Resolve-PythonPath {
 $pythonPath = Resolve-PythonPath -Requested $Python
 $monitorProcess = $null
 $currentMode = $ConnectionMode
+
+function Invoke-WifiSetup {
+  $form = New-Object System.Windows.Forms.Form
+  $form.Text = "CodexLight WiFi"
+  $form.StartPosition = "CenterScreen"
+  $form.FormBorderStyle = "FixedDialog"
+  $form.MaximizeBox = $false
+  $form.MinimizeBox = $false
+  $form.ClientSize = New-Object System.Drawing.Size(360, 170)
+
+  $ssidLabel = New-Object System.Windows.Forms.Label
+  $ssidLabel.Text = "SSID"
+  $ssidLabel.Location = New-Object System.Drawing.Point(16, 18)
+  $ssidLabel.Size = New-Object System.Drawing.Size(80, 22)
+  [void]$form.Controls.Add($ssidLabel)
+
+  $ssidBox = New-Object System.Windows.Forms.TextBox
+  $ssidBox.Location = New-Object System.Drawing.Point(104, 16)
+  $ssidBox.Size = New-Object System.Drawing.Size(236, 24)
+  [void]$form.Controls.Add($ssidBox)
+
+  $passwordLabel = New-Object System.Windows.Forms.Label
+  $passwordLabel.Text = "Password"
+  $passwordLabel.Location = New-Object System.Drawing.Point(16, 56)
+  $passwordLabel.Size = New-Object System.Drawing.Size(80, 22)
+  [void]$form.Controls.Add($passwordLabel)
+
+  $passwordBox = New-Object System.Windows.Forms.TextBox
+  $passwordBox.Location = New-Object System.Drawing.Point(104, 54)
+  $passwordBox.Size = New-Object System.Drawing.Size(236, 24)
+  $passwordBox.UseSystemPasswordChar = $true
+  [void]$form.Controls.Add($passwordBox)
+
+  $statusLabel = New-Object System.Windows.Forms.Label
+  $statusLabel.Text = "USB must be connected."
+  $statusLabel.Location = New-Object System.Drawing.Point(16, 92)
+  $statusLabel.Size = New-Object System.Drawing.Size(324, 22)
+  [void]$form.Controls.Add($statusLabel)
+
+  $saveButton = New-Object System.Windows.Forms.Button
+  $saveButton.Text = "Save"
+  $saveButton.Location = New-Object System.Drawing.Point(184, 126)
+  $saveButton.Size = New-Object System.Drawing.Size(76, 28)
+  [void]$form.Controls.Add($saveButton)
+
+  $cancelButton = New-Object System.Windows.Forms.Button
+  $cancelButton.Text = "Cancel"
+  $cancelButton.Location = New-Object System.Drawing.Point(264, 126)
+  $cancelButton.Size = New-Object System.Drawing.Size(76, 28)
+  $cancelButton.Add_Click({ $form.Close() })
+  [void]$form.Controls.Add($cancelButton)
+
+  $saveButton.Add_Click({
+    $ssid = $ssidBox.Text.Trim()
+    $password = $passwordBox.Text
+    if ([string]::IsNullOrWhiteSpace($ssid) -or $ssid.Length -gt 32 -or $password.Length -gt 64 -or ($password.Length -gt 0 -and $password.Length -lt 8)) {
+      [System.Windows.Forms.MessageBox]::Show("SSID or password format is invalid.", "CodexLight WiFi", "OK", "Warning") | Out-Null
+      return
+    }
+
+    $statusLabel.Text = "Configuring..."
+    $form.Refresh()
+    Stop-Monitor
+
+    Remove-Item -LiteralPath $wifiSetupOutLog, $wifiSetupErrLog -Force -ErrorAction SilentlyContinue
+
+    $wifiConfigPath = Join-Path $env:TEMP ("codexlight_wifi_{0}.json" -f ([Guid]::NewGuid().ToString("N")))
+    @{ ssid = $ssid; password = $password } |
+      ConvertTo-Json -Compress |
+      Set-Content -LiteralPath $wifiConfigPath -Encoding UTF8
+
+    $args = @(
+      $monitorScript,
+      "--serial", $SerialPort,
+      "--baud", $SerialBaud.ToString(),
+      "--wifi-config", $wifiConfigPath
+    )
+
+    $process = Start-Process `
+      -FilePath $pythonPath `
+      -ArgumentList $args `
+      -WorkingDirectory $WorkDir `
+      -WindowStyle Hidden `
+      -RedirectStandardOutput $wifiSetupOutLog `
+      -RedirectStandardError $wifiSetupErrLog `
+      -Wait `
+      -PassThru
+
+    Remove-Item -LiteralPath $wifiConfigPath -Force -ErrorAction SilentlyContinue
+
+    Start-Monitor
+    if ($process.ExitCode -eq 0) {
+      [System.Windows.Forms.MessageBox]::Show("WiFi saved and connected.", "CodexLight WiFi", "OK", "Information") | Out-Null
+      $form.Close()
+    } else {
+      $details = Get-RecentLogText -Paths @($wifiSetupOutLog, $wifiSetupErrLog)
+      [System.Windows.Forms.MessageBox]::Show("WiFi setup failed." + [Environment]::NewLine + [Environment]::NewLine + $details, "CodexLight WiFi", "OK", "Error") | Out-Null
+      $statusLabel.Text = "Setup failed."
+    }
+  })
+
+  [void]$form.ShowDialog()
+}
 
 function Get-MonitorArguments {
   switch ($script:currentMode) {
@@ -168,6 +292,11 @@ $wirelessModeItem.Add_Click({ Set-ConnectionMode -Mode "WIRELESS" })
 [void]$modeMenu.DropDownItems.Add($wirelessModeItem)
 
 [void]$menu.Items.Add($modeMenu)
+
+$wifiSetupItem = New-Object System.Windows.Forms.ToolStripMenuItem
+$wifiSetupItem.Text = "Configure WiFi"
+$wifiSetupItem.Add_Click({ Invoke-WifiSetup })
+[void]$menu.Items.Add($wifiSetupItem)
 
 $openLogItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $openLogItem.Text = "Open log folder"

@@ -105,7 +105,7 @@ class StateEmitter:
             else:
                 self.serial_module = serial
                 self.list_ports_module = list_ports
-                self.connect_serial(force=True)
+            self.connect_serial(force=True)
 
         if self.udp_enabled:
             self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -116,6 +116,49 @@ class StateEmitter:
                 self.udp_socket.bind(("", self.udp_port))
             except OSError as exc:
                 print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} UDP listen disabled: {exc}", flush=True)
+
+    def configure_wifi(self, ssid: str, password: str, timeout: float = 45.0) -> bool:
+        if not ssid or len(ssid) > 32 or len(password) > 64 or (password and len(password) < 8):
+            print("WIFI_SETUP_ERROR INVALID_CREDENTIALS", flush=True)
+            return False
+
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            self.connect_serial(force=self.serial is None)
+            if self.serial is not None:
+                break
+            time.sleep(0.5)
+
+        if self.serial is None:
+            print("WIFI_SETUP_ERROR SERIAL_NOT_FOUND", flush=True)
+            return False
+
+        try:
+            self.serial.reset_input_buffer()
+            self.serial.write(f"WIFI_SET {ssid}\t{password}\n".encode("utf-8"))
+            self.serial.flush()
+        except Exception as exc:
+            print(f"WIFI_SETUP_ERROR SERIAL_WRITE_FAILED {exc}", flush=True)
+            self.close_serial()
+            return False
+
+        while time.monotonic() < deadline:
+            try:
+                line = self.serial.readline().decode("utf-8", errors="replace").strip()
+            except Exception as exc:
+                print(f"WIFI_SETUP_ERROR SERIAL_READ_FAILED {exc}", flush=True)
+                self.close_serial()
+                return False
+            if not line:
+                continue
+            print(f"DEVICE {line}", flush=True)
+            if line.startswith("WIFI_SET_OK "):
+                return True
+            if line.startswith("WIFI_SET_ERROR "):
+                return False
+
+        print("WIFI_SETUP_ERROR TIMEOUT", flush=True)
+        return False
 
     def connect_serial(self, force: bool = False) -> None:
         if not self.serial_port or self.serial_module is None:
@@ -645,6 +688,9 @@ def parse_args() -> argparse.Namespace:
         help="Seconds between repeated UDP state heartbeats.",
     )
     parser.add_argument("--repeat", action="store_true", help="Print/send repeated identical states.")
+    parser.add_argument("--wifi-ssid", default="", help="Configure device Wi-Fi over USB serial, then exit.")
+    parser.add_argument("--wifi-password", default="", help="Wi-Fi password used with --wifi-ssid.")
+    parser.add_argument("--wifi-config", type=Path, default=None, help="JSON file with ssid/password for USB Wi-Fi setup.")
     return parser.parse_args()
 
 
@@ -669,6 +715,17 @@ def main() -> int:
         args.firmware_mode,
         args.serial_setup_only,
     )
+
+    wifi_ssid = args.wifi_ssid
+    wifi_password = args.wifi_password
+    if args.wifi_config is not None:
+        wifi_config = load_local_config(args.wifi_config)
+        wifi_ssid = str(wifi_config.get("ssid") or "")
+        wifi_password = str(wifi_config.get("password") or "")
+
+    if wifi_ssid:
+        return 0 if emitter.configure_wifi(wifi_ssid, wifi_password) else 2
+
     ms = MonitorState()
     offsets: Dict[Path, int] = {}
 

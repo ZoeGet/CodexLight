@@ -364,6 +364,18 @@ void sendHello() {
   udp.endPacket();
 }
 
+void sendUdpAck(IPAddress remoteIp, uint16_t remotePort) {
+  if (!udpStarted) {
+    return;
+  }
+  const String message = "CODEXLIGHT/1 ACK mac=" + WiFi.macAddress() +
+                         " mode=" + modeName(transportMode) +
+                         " active=" + transportName(activeTransport);
+  udp.beginPacket(remoteIp, remotePort);
+  udp.print(message);
+  udp.endPacket();
+}
+
 void maintainUdp() {
   if (!configPortal.wifiConnected()) {
     if (udpStarted) {
@@ -396,6 +408,9 @@ void maintainUdp() {
     return;
   }
 
+  const IPAddress remoteIp = udp.remoteIP();
+  const uint16_t remotePort = udp.remotePort();
+
   char packet[128];
   const int length = udp.read(packet, sizeof(packet) - 1);
   if (length <= 0) {
@@ -410,9 +425,11 @@ void maintainUdp() {
   upper.toUpperCase();
   if (upper == "PING" || upper == "CODEXLIGHT/1 PING") {
     lastWirelessPacketMs = now;
+    sendUdpAck(remoteIp, remotePort);
   } else if (parseState(upper, state)) {
     wirelessState = state;
     lastWirelessPacketMs = now;
+    sendUdpAck(remoteIp, remotePort);
   }
 }
 

@@ -81,6 +81,7 @@ class StateEmitter:
         self.udp_tx_socket = None
         self.last_udp_send = 0.0
         self.last_udp_broadcast_send = 0.0
+        self.last_udp_subnet_probe = 0.0
         self.last_serial_send = 0.0
         self.last_udp_listen = 0.0
         self.serial_mode = firmware_mode or ("AUTO" if self.udp_enabled else "WIRED")
@@ -378,6 +379,9 @@ class StateEmitter:
                     f"{time.strftime('%Y-%m-%d %H:%M:%S')} UDP targets {', '.join(unique_ordered(targets))}",
                     flush=True,
                 )
+            if self.device_ip and now - self.last_udp_subnet_probe >= 10.0:
+                targets.extend(self.udp_subnet_probe_targets())
+                self.last_udp_subnet_probe = now
             for target in unique_ordered(targets):
                 self.udp_tx_socket.sendto(payload, (target, self.udp_port))
             self.last_udp_send = now
@@ -391,6 +395,13 @@ class StateEmitter:
             if len(octets) == 4:
                 targets.append(".".join(octets[:3] + ["255"]))
         return unique_ordered(targets)
+
+    def udp_subnet_probe_targets(self) -> list[str]:
+        octets = self.device_ip.split(".") if self.device_ip else []
+        if len(octets) != 4:
+            return []
+        prefix = ".".join(octets[:3])
+        return [f"{prefix}.{host}" for host in range(1, 255)]
 
     def listen_udp_discovery(self) -> None:
         if self.udp_socket is None:
@@ -413,7 +424,7 @@ class StateEmitter:
             if not message.startswith("CODEXLIGHT/1 "):
                 continue
 
-            if " HELLO" not in message:
+            if " HELLO" not in message and " ACK" not in message:
                 continue
 
             mac = extract_field(message, "mac")
@@ -432,6 +443,11 @@ class StateEmitter:
                 save_local_config(self.config_path, self.config)
                 print(
                     f"{time.strftime('%Y-%m-%d %H:%M:%S')} UDP device {mac} at {self.device_ip}",
+                    flush=True,
+                )
+            if " ACK" in message:
+                print(
+                    f"{time.strftime('%Y-%m-%d %H:%M:%S')} UDP ack from {sender[0]} {message}",
                     flush=True,
                 )
 

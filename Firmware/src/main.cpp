@@ -51,6 +51,9 @@ bool udpStarted = false;
 unsigned long lastWiredPacketMs = 0;
 unsigned long lastWirelessPacketMs = 0;
 unsigned long lastHelloMs = 0;
+unsigned long lastUdpPacketMs = 0;
+unsigned long udpPacketCount = 0;
+String lastUdpText;
 bool linkWasConnected = false;
 bool connectionAnimationActive = false;
 unsigned long connectionAnimationStartedMs = 0;
@@ -273,6 +276,14 @@ void printStatus() {
     Serial.print(" ip=");
     Serial.print(WiFi.localIP());
   }
+  Serial.print(" udp_packets=");
+  Serial.print(udpPacketCount);
+  Serial.print(" last_udp_ms=");
+  Serial.print(lastUdpPacketMs);
+  if (lastUdpText.length() > 0) {
+    Serial.print(" last_udp=");
+    Serial.print(lastUdpText);
+  }
   Serial.println();
 }
 
@@ -320,6 +331,26 @@ void handleControlCommand(String command) {
     } else {
       Serial.println(String("WIFI_SET_ERROR CONNECT_FAILED ") + ssid);
     }
+    return;
+  }
+  if (upper == "LED_TEST RED") {
+    showFrame(LedFrame::Red, millis());
+    Serial.println("LED_TEST_OK RED");
+    return;
+  }
+  if (upper == "LED_TEST GREEN") {
+    showFrame(LedFrame::Green, millis());
+    Serial.println("LED_TEST_OK GREEN");
+    return;
+  }
+  if (upper == "LED_TEST YELLOW") {
+    showFrame(LedFrame::Yellow, millis());
+    Serial.println("LED_TEST_OK YELLOW");
+    return;
+  }
+  if (upper == "LED_TEST OFF") {
+    showFrame(LedFrame::Off, millis());
+    Serial.println("LED_TEST_OK OFF");
     return;
   }
   LightState state;
@@ -419,6 +450,10 @@ void maintainUdp() {
   packet[length] = '\0';
 
   String command(packet);
+  lastUdpPacketMs = now;
+  udpPacketCount += 1;
+  lastUdpText = command;
+  lastUdpText.trim();
   LightState state;
   String upper = command;
   upper.trim();

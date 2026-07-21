@@ -1,9 +1,10 @@
 # Firmware Headers
 
-Project header files:
+Project header files / 项目头文件：
 
-- `config.h`: GPIO assignments, timing, serial/UDP, AP credentials, default mode, and colors.
-- `config_portal.h`: non-blocking WiFiManager wrapper.
+- `config.h`: GPIO assignments, brightness, serial baud, UDP port, timeouts, default transport mode, and LED colors. AP constants are retained for compatibility but the main firmware does not start an AP.
+- `config_portal.h`: STA Wi-Fi connection and USB provisioning wrapper. The name is kept for compatibility with older code.
+- `storage.h`: Preferences storage for Wi-Fi SSID/password.
 - `led.h`: three-channel LED controller interface.
 
 用户通常只需要修改 `config.h`。修改后重新运行 `pio run` 并烧录。

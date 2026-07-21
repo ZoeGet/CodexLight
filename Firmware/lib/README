@@ -2,9 +2,8 @@
 
 This directory is reserved for future project-specific PlatformIO libraries.
 
-当前固件没有本地私有库。外部依赖在 `Firmware/platformio.ini` 中声明：
+本目录预留给未来的项目私有 PlatformIO 库。
 
-- Adafruit NeoPixel
-- WiFiManager
+The current firmware has no private local libraries. External dependencies are declared in `Firmware/platformio.ini`; currently the main external dependency is `Adafruit NeoPixel`.
 
-The current firmware has no private local libraries. External dependencies are declared in `Firmware/platformio.ini`.
+当前固件没有本地私有库。外部依赖在 `Firmware/platformio.ini` 中声明，目前主要外部依赖是 `Adafruit NeoPixel`。

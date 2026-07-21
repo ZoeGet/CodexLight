@@ -2,11 +2,24 @@
 
 This directory is reserved for PlatformIO unit and hardware-in-the-loop tests.
 
+本目录预留给 PlatformIO 单元测试和硬件在环测试。
+
+There are currently no automated firmware tests. Before submitting firmware changes, run at least:
+
 当前没有自动化固件测试。提交固件修改前至少执行：
 
 ```powershell
 cd Firmware
-pio run -j 1
+pio run
 ```
 
-Hardware changes should also be checked on an ESP32-C3 for serial commands, AP provisioning, UDP heartbeat timeout, the two-second connection animation, and exclusive red/green/yellow LED output.
+Hardware validation should cover:
+
+- USB serial commands: `STATUS`, `MODE ...`, `WIFI_SET`, `CLEAR_WIFI`.
+- STA Wi-Fi connection after USB provisioning.
+- UDP discovery and heartbeat timeout.
+- AUTO/WIRED/WIRELESS mode switching.
+- Two-second green connection animation.
+- Exclusive red/green/yellow LED output.
+
+硬件验证应覆盖 USB 串口命令、USB 配网后的 STA 联网、UDP 发现和心跳超时、三种模式切换、2 秒绿灯连接动画，以及红/绿/黄三灯互斥显示。

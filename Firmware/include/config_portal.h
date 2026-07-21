@@ -30,6 +30,7 @@ class ConfigPortal {
   uint8_t lastDisconnectReason_ = 0;
 
   void buildApSsid();
+  void startSavedConnect(const String& ssid, const String& password);
   bool connectTo(const String& ssid, const String& password);
   bool loadCredentials(WifiCredentials& credentials);
 };

@@ -81,17 +81,8 @@ bool ConfigPortal::autoConnect() {
   }
 
   currentSsid_ = credentials.ssid;
-  if (connectTo(credentials.ssid, credentials.password)) {
-    return true;
-  }
-
-  lastReconnectAttemptMs_ = millis();
-  logNetwork("Saved Wi-Fi failed; keeping credentials and retrying in wireless mode");
-  WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);
-  WiFi.setAutoReconnect(true);
-  WiFi.begin(credentials.ssid.c_str(), credentials.password.c_str());
-  return false;
+  startSavedConnect(credentials.ssid, credentials.password);
+  return WiFi.status() == WL_CONNECTED;
 }
 
 bool ConfigPortal::start() {
@@ -113,18 +104,11 @@ void ConfigPortal::loop() {
 
   currentSsid_ = credentials.ssid;
   const unsigned long now = millis();
-  if (lastReconnectAttemptMs_ != 0 && now - lastReconnectAttemptMs_ < WIFI_RECONNECT_INTERVAL_MS) {
+  if (now - lastReconnectAttemptMs_ < WIFI_RECONNECT_INTERVAL_MS) {
     return;
   }
 
-  lastReconnectAttemptMs_ = now;
-  logNetwork("Retrying saved Wi-Fi " + credentials.ssid);
-  if (!connectTo(credentials.ssid, credentials.password)) {
-    WiFi.mode(WIFI_STA);
-    WiFi.setSleep(false);
-    WiFi.setAutoReconnect(true);
-    WiFi.begin(credentials.ssid.c_str(), credentials.password.c_str());
-  }
+  startSavedConnect(credentials.ssid, credentials.password);
 }
 
 void ConfigPortal::resetSettings() {
@@ -208,6 +192,19 @@ uint8_t ConfigPortal::lastDisconnectReason() const {
 
 void ConfigPortal::buildApSsid() {
   apSsid_ = "USB_SERIAL";
+}
+
+void ConfigPortal::startSavedConnect(const String& ssid, const String& password) {
+  lastReconnectAttemptMs_ = millis();
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
+  WiFi.setAutoReconnect(true);
+  esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
+  esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT20);
+  esp_wifi_set_max_tx_power(WIFI_MAX_TX_POWER_QDBM);
+  lastDisconnectReason_ = 0;
+  logNetwork("Starting saved Wi-Fi " + ssid + " tx_power_qdbm=" + String(WIFI_MAX_TX_POWER_QDBM));
+  WiFi.begin(ssid.c_str(), password.c_str());
 }
 
 bool ConfigPortal::connectTo(const String& ssid, const String& password) {

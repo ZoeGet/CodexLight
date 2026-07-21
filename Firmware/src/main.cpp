@@ -471,6 +471,25 @@ void maintainUdp() {
   }
 }
 
+void showNoWifiConfig(unsigned long now) {
+  const bool redPhase = (now / 1000UL) % 2 == 0;
+  showFrame(redPhase ? LedFrame::Red : LedFrame::Yellow, now);
+}
+
+void showWifiReconnect(unsigned long now) {
+  const unsigned long phase = now % 2000UL;
+  if (phase < 200UL || (phase >= 400UL && phase < 600UL)) {
+    showFrame(LedFrame::Red, now);
+  } else {
+    showFrame(LedFrame::Off, now);
+  }
+}
+
+void showWaitingForComputer(unsigned long now) {
+  const bool on = (now / DISCONNECTED_BLINK_HALF_PERIOD_MS) % 2 == 0;
+  showFrame(on ? LedFrame::Yellow : LedFrame::Off, now);
+}
+
 void updateLeds() {
   if (!ledsInitialized) {
     return;
@@ -491,11 +510,12 @@ void updateLeds() {
   linkWasConnected = connected;
 
   if (!connected) {
-    const bool on = (now / DISCONNECTED_BLINK_HALF_PERIOD_MS) % 2 == 0;
-    if (on) {
-      showFrame(LedFrame::Yellow, now);
+    if (configPortal.wifiConnected()) {
+      showWaitingForComputer(now);
+    } else if (configPortal.configuredSsid().length() > 0) {
+      showWifiReconnect(now);
     } else {
-      showFrame(LedFrame::Off, now);
+      showNoWifiConfig(now);
     }
     return;
   }

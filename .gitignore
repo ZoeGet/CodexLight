@@ -28,3 +28,9 @@
 Firmware/include/wifi_secrets.h
 Bridge/config.local.json
 Bridge/logs/
+Bridge/__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Local diagnostic firmware sketches that are not part of the shipped build.
+Firmware/ap_join_test/

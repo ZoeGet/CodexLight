@@ -97,6 +97,13 @@ CodexLight 是一套基于 ESP32-C3FH4 的 Codex Desktop 状态灯。Windows 端
 | 3.3 V 电源 | TLV75733PDBVR 将 +5 V 稳压为 +3.3 V，为 ESP32-C3FH4 和逻辑电路供电 |
 | 状态灯 | 黄灯 GPIO5、绿灯 GPIO6、红灯 GPIO7；每路串联 330 Ω，并配置 100 nF 去耦电容 |
 
+<p>
+  <img src="Hardware/Images/schematic-mcu.png" width="49%" />
+  <img src="Hardware/Images/schematic-interface-power.png" width="49%" />
+</p>
+
+左图为 ESP32-C3FH4 主控、射频、晶振及 RST/BOOT 电路，右图为三路状态灯、Type-C、电池管理和 3.3 V 稳压电路。
+
 三颗 WS2812B 使用三路独立数据输入，不是串联灯带。灯珠使用 +5 V 供电，ESP32-C3FH4 使用 +3.3 V 供电，二者必须共地。当前固件使用 `NEO_GRB + NEO_KHZ800`，默认亮度为 `DEFAULT_BRIGHTNESS = 50`，可在 [Firmware/include/config.h](Firmware/include/config.h) 中配置。
 
 原理图中 ETA9697E8A 的 NTC 和 STAT 没有外接温度检测或状态指示。电池必须核对接口极性并带有保护电路，充电电流应根据 R5 和所用电池容量核算。更详细的电路说明和组装注意事项见 [开源平台项目说明](Docs/立创开源平台项目说明.md)。

@@ -97,6 +97,13 @@ The current hardware is a custom all-in-one board built around the ESP32-C3FH4. 
 | 3.3 V rail | TLV75733PDBVR regulates +5 V down to +3.3 V for the ESP32-C3FH4 and logic circuitry |
 | Status LEDs | Yellow on GPIO5, green on GPIO6, and red on GPIO7; each data line has a 330 Ω resistor and each LED has 100 nF decoupling |
 
+<p>
+  <img src="Hardware/Images/schematic-mcu.png" width="49%" />
+  <img src="Hardware/Images/schematic-interface-power.png" width="49%" />
+</p>
+
+The left image shows the ESP32-C3FH4 MCU, RF, crystal, and RST/BOOT circuits. The right image shows the three status LEDs, USB Type-C, battery management, and 3.3 V regulator.
+
 The three WS2812B LEDs use independent data inputs; they are not a chained strip. The LEDs run from +5 V while the ESP32-C3FH4 runs from +3.3 V, and both rails must share ground. The firmware uses `NEO_GRB + NEO_KHZ800`. Default brightness is `DEFAULT_BRIGHTNESS = 50` and can be configured in [Firmware/include/config.h](Firmware/include/config.h).
 
 The schematic leaves the ETA9697E8A NTC and STAT pins without external temperature sensing or a status indicator. Verify battery connector polarity, use a protected cell, and calculate the charge current from R5 and the selected battery capacity. See the [open-source platform project description](Docs/立创开源平台项目说明.md) for detailed circuit and assembly notes.

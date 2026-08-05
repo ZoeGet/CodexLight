@@ -37,7 +37,6 @@ class MonitorState:
     state: str = STATE_GREEN
     reason: str = "startup"
     last_activity: float = field(default_factory=time.monotonic)
-    last_emit: float = 0.0
     pending_calls: Dict[str, str] = field(default_factory=dict)
     pending_approvals: Dict[str, str] = field(default_factory=dict)
     active_turn_id: Optional[str] = None
@@ -749,12 +748,6 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=20.0,
         help="Fallback seconds with no activity before returning to GREEN.",
-    )
-    parser.add_argument(
-        "--complete-grace",
-        type=float,
-        default=1.5,
-        help="Deprecated compatibility option; task_complete now controls GREEN.",
     )
     parser.add_argument("--from-start", action="store_true", help="Process existing JSONL content.")
     parser.add_argument("--serial", help="Optional serial port, for example COM5, or auto.")

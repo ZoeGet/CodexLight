@@ -2,7 +2,9 @@
 
 [English](README.en.md) | 简体中文 | [使用说明](USAGE.md) | [English Usage Guide](USAGE.en.md)
 
-CodexLight 是一套基于 ESP32-C3 的 Codex Desktop 状态灯。Windows 端 Bridge 读取本机 Codex 会话日志，把状态转换为 `GREEN`、`RED`、`YELLOW`，再通过 USB 串口、局域网 UDP 或两者同时发送给 ESP32-C3。固件驱动三颗独立 WS2812B LED 显示空闲、工作和等待状态。
+CodexLight 是一套基于 ESP32-C3FH4 的 Codex Desktop 状态灯。Windows 端 Bridge 读取本机 Codex 会话日志，把状态转换为 `GREEN`、`RED`、`YELLOW`，再通过 USB 串口、局域网 UDP 或两者同时发送给状态灯。固件驱动三颗独立 WS2812B LED 显示空闲、工作和等待状态。
+
+硬件采用一体化主板设计，集成 ESP32-C3FH4、2.4 GHz 天线、40 MHz 晶振、Type-C 原生 USB、电池充电与 5 V 升压以及 3.3 V 稳压电路，不需要额外安装 ESP32-C3 开发板。
 
 本项目是社区开源项目，与 OpenAI 没有官方关联或背书。
 
@@ -12,8 +14,8 @@ CodexLight 是一套基于 ESP32-C3 的 Codex Desktop 状态灯。Windows 端 Br
 - 托盘程序提供 `Configure WiFi`，通过 USB 把 SSID 和密码发送给设备。
 - Wi-Fi 只在连接成功后写入 ESP32 NVS；错误密码不会覆盖旧配置。
 - 已保存的 Wi-Fi 会在开机后非阻塞连接，并在断线后持续重试。
-- ESP32-C3 Wi-Fi 发射功率默认限制为 8.5 dBm，以提升部分开发板的无线连接稳定性。
-- 无电脑供电启动不依赖 USB 串口，适合充电宝或电池供电的纯无线摆放。
+- ESP32-C3 Wi-Fi 发射功率默认限制为 8.5 dBm，以提升当前硬件的无线连接稳定性。
+- 无电脑供电启动不依赖 USB 串口，可使用板载电池接口或稳定 5 V 电源进行纯无线摆放。
 - 支持 `AUTO`、`WIRED`、`WIRELESS` 三种持久化通信模式。
 - `Bridge/start_codex_light_tray.vbs` 默认以无线模式隐藏启动，不保留 PowerShell 窗口。
 
@@ -50,8 +52,8 @@ CodexLight 是一套基于 ESP32-C3 的 Codex Desktop 状态灯。Windows 端 Br
    Bridge\start_codex_light_tray.vbs
    ```
 
-4. 第一次使用时，用 USB 连接 ESP32-C3，右键托盘图标选择 `Configure WiFi`，输入路由器 SSID 和密码。
-5. Wi-Fi 保存成功后，可以拔掉电脑 USB，改用充电宝或锂电池供电；托盘会通过 UDP 控灯。
+4. 第一次使用时，用可传输数据的 Type-C 线连接设备，右键托盘图标选择 `Configure WiFi`，输入路由器 SSID 和密码。
+5. Wi-Fi 保存成功后，可以拔掉电脑 USB，改用稳定 5 V 电源或从 MX1.25 接口接入的受保护单节锂电池供电；托盘会通过 UDP 控灯。
 
 完整流程见 [USAGE.md](USAGE.md)。
 
@@ -59,7 +61,7 @@ CodexLight 是一套基于 ESP32-C3 的 Codex Desktop 状态灯。Windows 端 Br
 
 1. 先用 USB 完成一次 `Configure WiFi`。
 2. 确认托盘模式是 `Wireless only`，或用默认 `start_codex_light_tray.vbs` 启动。
-3. 断开电脑 USB，使用充电宝或稳定 5 V 电源给 ESP32-C3 和 LED 供电。
+3. 断开电脑 USB，使用稳定 5 V 电源或从 MX1.25 接口接入的受保护单节锂电池给整机供电。
 4. 打开托盘后，日志应出现：
 
    ```text
@@ -81,24 +83,23 @@ CodexLight 是一套基于 ESP32-C3 的 Codex Desktop 状态灯。Windows 端 Br
 
 ## 硬件
 
-推荐器件：
+<img src="Hardware/Images/schematic.png" width="800" />
 
-- ESP32-C3 SuperMini 或兼容 ESP32-C3 开发板
-- 三颗 WS2812B RGB LED
-- 稳定 5 V 电源、充电宝或合适的锂电池升压模块
-- USB 数据线，用于烧录和第一次 Wi-Fi 配网
+当前硬件是围绕 ESP32-C3FH4 设计的一体化主板，完整原理图见 [Hardware/Schematic/Schematic.pdf](Hardware/Schematic/Schematic.pdf)。
 
-接线：
-
-| 功能 | ESP32-C3 引脚 |
+| 功能模块 | 主要器件与连接 |
 | --- | --- |
-| 黄灯 DIN | GPIO5 |
-| 绿灯 DIN | GPIO6 |
-| 红灯 DIN | GPIO7 |
-| WS2812B VCC | 5 V |
-| WS2812B GND | GND |
+| 主控与时钟 | ESP32-C3FH4，外接 40 MHz 晶振；RST 接 CHIP_EN，BOOT 接 GPIO9 |
+| 无线射频 | AN9520-245 2.4 GHz 天线，R9/C11/C12 预留射频匹配网络 |
+| USB Type-C | 原生 USB D+/D- 分别连接 GPIO19/GPIO18，并串联 22 Ω；CC1、CC2 各使用 5.1 kΩ 下拉 |
+| USB 供电 | VBUS 经 BAT60JFILM 肖特基二极管接入系统 +5 V |
+| 电池供电 | ETA9697E8A 负责单节电池线性充电和 5 V 升压，使用 2.2 µH 电感、MX1.25 电池接口和电源开关 |
+| 3.3 V 电源 | TLV75733PDBVR 将 +5 V 稳压为 +3.3 V，为 ESP32-C3FH4 和逻辑电路供电 |
+| 状态灯 | 黄灯 GPIO5、绿灯 GPIO6、红灯 GPIO7；每路串联 330 Ω，并配置 100 nF 去耦电容 |
 
-三颗 WS2812B 使用三路独立数据输入，不是串联灯带。当前固件使用 `NEO_GRB + NEO_KHZ800`，默认亮度为 `DEFAULT_BRIGHTNESS = 50`，可在 [Firmware/include/config.h](Firmware/include/config.h) 中配置。
+三颗 WS2812B 使用三路独立数据输入，不是串联灯带。灯珠使用 +5 V 供电，ESP32-C3FH4 使用 +3.3 V 供电，二者必须共地。当前固件使用 `NEO_GRB + NEO_KHZ800`，默认亮度为 `DEFAULT_BRIGHTNESS = 50`，可在 [Firmware/include/config.h](Firmware/include/config.h) 中配置。
+
+原理图中 ETA9697E8A 的 NTC 和 STAT 没有外接温度检测或状态指示。电池必须核对接口极性并带有保护电路，充电电流应根据 R5 和所用电池容量核算。更详细的电路说明和组装注意事项见 [开源平台项目说明](Docs/立创开源平台项目说明.md)。
 
 ## 目录结构
 

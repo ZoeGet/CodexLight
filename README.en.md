@@ -2,7 +2,9 @@
 
 English | [简体中文](README.md) | [English Usage Guide](USAGE.en.md) | [中文使用说明](USAGE.md)
 
-CodexLight is an ESP32-C3 status light for Codex Desktop. A Windows Bridge reads local Codex session logs, maps activity to `GREEN`, `RED`, or `YELLOW`, and sends the state to an ESP32-C3 over USB serial, LAN UDP, or both. The firmware drives three independent WS2812B LEDs for idle, working, and waiting states.
+CodexLight is an ESP32-C3FH4 status light for Codex Desktop. A Windows Bridge reads local Codex session logs, maps activity to `GREEN`, `RED`, or `YELLOW`, and sends the state to the device over USB serial, LAN UDP, or both. The firmware drives three independent WS2812B LEDs for idle, working, and waiting states.
+
+The custom all-in-one board integrates the ESP32-C3FH4, a 2.4 GHz antenna, a 40 MHz crystal, native USB Type-C, battery charging and 5 V boost power, and a 3.3 V regulator. No separate ESP32-C3 development board is required.
 
 This is an independent community project and is not officially affiliated with or endorsed by OpenAI.
 
@@ -12,8 +14,8 @@ This is an independent community project and is not officially affiliated with o
 - The tray app provides `Configure WiFi`, which sends SSID/password to the device over USB.
 - Wi-Fi credentials are saved to ESP32 NVS only after a successful connection. Bad credentials do not overwrite the previous working setup.
 - Saved Wi-Fi connects non-blockingly at boot and keeps retrying after disconnects.
-- ESP32-C3 Wi-Fi transmit power defaults to 8.5 dBm to improve wireless stability on some development boards.
-- Standalone power does not depend on USB serial, so the device can run from a power bank or battery supply in wireless mode.
+- ESP32-C3 Wi-Fi transmit power defaults to 8.5 dBm to improve wireless stability on the current hardware.
+- Standalone operation does not depend on USB serial. The device can run from its battery connector or a stable 5 V supply in wireless mode.
 - Persistent `AUTO`, `WIRED`, and `WIRELESS` transport modes are supported.
 - `Bridge/start_codex_light_tray.vbs` starts the tray hidden and defaults to wireless mode.
 
@@ -50,8 +52,8 @@ When the first valid desktop heartbeat arrives, the green LED blinks for two sec
    Bridge\start_codex_light_tray.vbs
    ```
 
-4. For first-time setup, connect the ESP32-C3 over USB, right-click the tray icon, choose `Configure WiFi`, and enter the router SSID/password.
-5. After Wi-Fi is saved, unplug the computer USB and power the device from a power bank or battery supply. The tray controls the light over UDP.
+4. For first-time setup, connect the device with a data-capable Type-C cable, right-click the tray icon, choose `Configure WiFi`, and enter the router SSID/password.
+5. After Wi-Fi is saved, unplug the computer USB and power the device from a stable 5 V supply or a protected single-cell Li-ion battery connected through MX1.25. The tray controls the light over UDP.
 
 See [USAGE.en.md](USAGE.en.md) for the full workflow.
 
@@ -59,7 +61,7 @@ See [USAGE.en.md](USAGE.en.md) for the full workflow.
 
 1. Complete `Configure WiFi` once over USB.
 2. Use `Wireless only`, or start the default `start_codex_light_tray.vbs` launcher.
-3. Power the ESP32-C3 and LEDs from a power bank or stable 5 V supply, without connecting USB to the computer.
+3. Power the complete device from a stable 5 V supply or a protected single-cell Li-ion battery connected through MX1.25, without connecting USB to the computer.
 4. The tray log should show:
 
    ```text
@@ -81,24 +83,23 @@ This means there is no computer serial link and the device is working over Wi-Fi
 
 ## Hardware
 
-Recommended parts:
+<img src="Hardware/Images/schematic.png" width="800" />
 
-- ESP32-C3 SuperMini or a compatible ESP32-C3 development board
-- Three WS2812B RGB LEDs
-- Stable 5 V supply, power bank, or suitable Li-ion boost converter
-- USB data cable for flashing and first-time Wi-Fi provisioning
+The current hardware is a custom all-in-one board built around the ESP32-C3FH4. See [Hardware/Schematic/Schematic.pdf](Hardware/Schematic/Schematic.pdf) for the complete schematic.
 
-Wiring:
-
-| Function | ESP32-C3 pin |
+| Function block | Main components and connections |
 | --- | --- |
-| Yellow LED DIN | GPIO5 |
-| Green LED DIN | GPIO6 |
-| Red LED DIN | GPIO7 |
-| WS2812B VCC | 5 V |
-| WS2812B GND | GND |
+| MCU and clock | ESP32-C3FH4 with an external 40 MHz crystal; RST drives CHIP_EN and BOOT drives GPIO9 |
+| Wireless RF | AN9520-245 2.4 GHz antenna with an R9/C11/C12 matching footprint |
+| USB Type-C | Native USB D+/D- connect to GPIO19/GPIO18 through 22 Ω resistors; CC1 and CC2 each use a 5.1 kΩ pull-down |
+| USB power | VBUS feeds the system +5 V rail through a BAT60JFILM Schottky diode |
+| Battery power | ETA9697E8A provides single-cell linear charging and 5 V boost power with a 2.2 µH inductor, MX1.25 battery connector, and power switch |
+| 3.3 V rail | TLV75733PDBVR regulates +5 V down to +3.3 V for the ESP32-C3FH4 and logic circuitry |
+| Status LEDs | Yellow on GPIO5, green on GPIO6, and red on GPIO7; each data line has a 330 Ω resistor and each LED has 100 nF decoupling |
 
-The LEDs use three independent data inputs; they are not a chained strip. The firmware uses `NEO_GRB + NEO_KHZ800`. Default brightness is `DEFAULT_BRIGHTNESS = 50` and can be configured in [Firmware/include/config.h](Firmware/include/config.h).
+The three WS2812B LEDs use independent data inputs; they are not a chained strip. The LEDs run from +5 V while the ESP32-C3FH4 runs from +3.3 V, and both rails must share ground. The firmware uses `NEO_GRB + NEO_KHZ800`. Default brightness is `DEFAULT_BRIGHTNESS = 50` and can be configured in [Firmware/include/config.h](Firmware/include/config.h).
+
+The schematic leaves the ETA9697E8A NTC and STAT pins without external temperature sensing or a status indicator. Verify battery connector polarity, use a protected cell, and calculate the charge current from R5 and the selected battery capacity. See the [open-source platform project description](Docs/立创开源平台项目说明.md) for detailed circuit and assembly notes.
 
 ## Repository Layout
 

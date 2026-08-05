@@ -114,7 +114,7 @@ The schematic leaves the ETA9697E8A NTC and STAT pins without external temperatu
 CodexLight/
 ├── Bridge/        # Windows log monitor, serial/UDP sender, and tray app
 ├── Firmware/      # ESP32-C3 PlatformIO firmware
-├── Hardware/      # BOM, schematic, PCB, Gerber, enclosure STL files
+├── Hardware/      # BOM, schematic, PCB, Gerber, placement data, enclosure STL files
 ├── Docs/          # Usage and implementation notes
 ├── README.md      # Chinese project documentation
 ├── README.en.md   # English project documentation

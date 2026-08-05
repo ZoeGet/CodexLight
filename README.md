@@ -114,7 +114,7 @@ CodexLight 是一套基于 ESP32-C3FH4 的 Codex Desktop 状态灯。Windows 端
 CodexLight/
 ├── Bridge/        # Windows 日志监听、串口/UDP 发送和托盘程序
 ├── Firmware/      # ESP32-C3 PlatformIO 固件
-├── Hardware/      # BOM、原理图、PCB、Gerber、外壳 STL
+├── Hardware/      # BOM、原理图、PCB、Gerber、贴片坐标、外壳 STL
 ├── Docs/          # 使用与实现说明
 ├── README.md      # 中文项目说明
 ├── README.en.md   # English project documentation

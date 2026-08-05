@@ -12,8 +12,6 @@ Adafruit_NeoPixel redLed(LEDS_PER_CHANNEL, RED_LED_PIN, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel greenLed(LEDS_PER_CHANNEL, GREEN_LED_PIN, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel yellowLed(LEDS_PER_CHANNEL, YELLOW_LED_PIN, NEO_GRB + NEO_KHZ800);
 
-uint8_t brightness = DEFAULT_BRIGHTNESS;
-
 void setPixel(Adafruit_NeoPixel& led, uint8_t red, uint8_t green, uint8_t blue) {
   led.setPixelColor(0, led.Color(red, green, blue));
 }
@@ -67,9 +65,8 @@ void LedController::allOff() {
 }
 
 void LedController::setBrightness(uint8_t value) {
-  brightness = value;
-  redLed.setBrightness(brightness);
-  greenLed.setBrightness(brightness);
-  yellowLed.setBrightness(brightness);
+  redLed.setBrightness(value);
+  greenLed.setBrightness(value);
+  yellowLed.setBrightness(value);
   refreshAll();
 }

@@ -59,8 +59,6 @@ bool connectionAnimationActive = false;
 unsigned long connectionAnimationStartedMs = 0;
 LedFrame displayedFrame = LedFrame::Off;
 unsigned long lastLedRefreshMs = 0;
-bool ledsInitialized = false;
-
 void debugPrint(const String& message) {
   if (!DEBUG_SERIAL) {
     return;
@@ -263,14 +261,6 @@ void printStatus() {
     default:
       Serial.print("UNKNOWN");
       break;
-  }
-  if (configPortal.portalActive()) {
-    Serial.print(" ap=");
-    Serial.print(WiFi.softAPSSID());
-    Serial.print(" ap_ip=");
-    Serial.print(WiFi.softAPIP());
-    Serial.print(" ap_clients=");
-    Serial.print(WiFi.softAPgetStationNum());
   }
   if (configPortal.wifiConnected()) {
     Serial.print(" ip=");
@@ -491,10 +481,6 @@ void showWaitingForComputer(unsigned long now) {
 }
 
 void updateLeds() {
-  if (!ledsInitialized) {
-    return;
-  }
-
   const unsigned long now = millis();
   activeTransport = selectActiveTransport(now);
   const bool connected = activeTransport != Transport::None;
@@ -537,18 +523,6 @@ void updateLeds() {
   showState(activeTransport == Transport::Wired ? wiredState : wirelessState, now);
 }
 
-void maintainLedController() {
-  if (ledsInitialized) {
-    return;
-  }
-
-  leds.begin();
-  ledsInitialized = true;
-  displayedFrame = LedFrame::Off;
-  lastLedRefreshMs = 0;
-  debugPrint("LED controller enabled after Wi-Fi provisioning");
-}
-
 }  // namespace
 
 void setup() {
@@ -557,7 +531,7 @@ void setup() {
   Serial.println();
   Serial.println("CODEXLIGHT READY");
 
-  maintainLedController();
+  leds.begin();
   showFrame(LedFrame::Yellow, millis());
 
   configPortal.begin();
@@ -572,14 +546,12 @@ void setup() {
 
   loadMode();
   debugPrint(String("Boot mode=") + modeName(transportMode));
-  debugPrint(String("Config AP=") + configPortal.apSsid());
   printStatus();
 }
 
 void loop() {
   configPortal.loop();
   handleSerialInput();
-  maintainLedController();
   maintainUdp();
   updateLeds();
   delay(2);

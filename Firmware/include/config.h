@@ -25,12 +25,6 @@ constexpr unsigned long CONNECTED_ANIMATION_MS = 2000;
 constexpr unsigned long CONNECTED_BLINK_HALF_PERIOD_MS = 250;
 constexpr unsigned long LED_REFRESH_INTERVAL_MS = 1000;
 
-// AP provisioning hotspot settings.
-constexpr const char* CONFIG_AP_SSID_PREFIX = "CodexLight_Setup";
-constexpr const char* CONFIG_AP_PASSWORD = "12345678";
-constexpr int32_t CONFIG_AP_CHANNEL = 6;
-constexpr uint8_t CONFIG_AP_MAX_CLIENTS = 4;
-
 // Change this to "WIRED" or "WIRELESS" to choose a fixed startup mode.
 // "AUTO" accepts both transports and prefers a recent wired heartbeat.
 constexpr const char* DEFAULT_TRANSPORT_MODE = "AUTO";

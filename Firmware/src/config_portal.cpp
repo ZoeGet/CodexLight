@@ -46,7 +46,6 @@ void ConfigPortal::begin() {
     return;
   }
 
-  buildApSsid();
   WiFi.persistent(false);
   WiFi.setSleep(false);
   WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info) {
@@ -83,12 +82,6 @@ bool ConfigPortal::autoConnect() {
   currentSsid_ = credentials.ssid;
   startSavedConnect(credentials.ssid, credentials.password);
   return WiFi.status() == WL_CONNECTED;
-}
-
-bool ConfigPortal::start() {
-  begin();
-  logNetwork("AP provisioning disabled; use USB serial WIFI_SET");
-  return false;
 }
 
 void ConfigPortal::loop() {
@@ -138,14 +131,6 @@ bool ConfigPortal::wifiConnected() const {
   return WiFi.status() == WL_CONNECTED;
 }
 
-bool ConfigPortal::portalActive() const {
-  return false;
-}
-
-const String& ConfigPortal::apSsid() const {
-  return apSsid_;
-}
-
 const String& ConfigPortal::configuredSsid() const {
   static String ssid;
   ssid = currentSsid_;
@@ -188,10 +173,6 @@ const char* ConfigPortal::wifiStatusName() const {
 
 uint8_t ConfigPortal::lastDisconnectReason() const {
   return lastDisconnectReason_;
-}
-
-void ConfigPortal::buildApSsid() {
-  apSsid_ = "USB_SERIAL";
 }
 
 void ConfigPortal::startSavedConnect(const String& ssid, const String& password) {

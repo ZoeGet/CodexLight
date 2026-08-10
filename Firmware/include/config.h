@@ -17,9 +17,6 @@ constexpr uint16_t UDP_PORT = 4210;
 constexpr unsigned long LINK_TIMEOUT_MS = 6000;
 constexpr unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000;
 constexpr unsigned long WIFI_RECONNECT_INTERVAL_MS = 10000;
-// ESP-IDF uses quarter-dBm units here. 34 means 8.5 dBm, which is more stable
-// on some ESP32-C3 Super Mini boards whose PCB antenna distorts at full power.
-constexpr int8_t WIFI_MAX_TX_POWER_QDBM = 34;
 constexpr unsigned long DISCONNECTED_BLINK_HALF_PERIOD_MS = 500;
 constexpr unsigned long CONNECTED_ANIMATION_MS = 2000;
 constexpr unsigned long CONNECTED_BLINK_HALF_PERIOD_MS = 250;

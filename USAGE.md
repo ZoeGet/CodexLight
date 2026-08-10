@@ -207,7 +207,7 @@ CODEXLIGHT/1 HELLO mac=<MAC> mode=<MODE>
 - 确认 USB 已连接，且 PlatformIO Monitor 或其他串口程序没有占用 COM 口。
 - ESP32-C3 只支持 2.4 GHz Wi-Fi。
 - 查看 `Bridge/logs/wifi_setup.out.log` 和 `Bridge/logs/wifi_setup.err.log`。
-- 当前固件默认把 ESP32-C3 Wi-Fi 发射功率限制为 8.5 dBm，以提升部分开发板的连接稳定性。
+- 当前固件使用 ESP32-C3 SDK 默认的 Wi-Fi 发射功率，由 PHY 和地区配置决定。
 
 ### 纯无线没有响应
 

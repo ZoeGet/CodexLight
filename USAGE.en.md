@@ -207,7 +207,7 @@ The default UDP port is `4210`.
 - Confirm USB is connected and PlatformIO Monitor or another serial terminal is not using the COM port.
 - ESP32-C3 supports 2.4 GHz Wi-Fi only.
 - Check `Bridge/logs/wifi_setup.out.log` and `Bridge/logs/wifi_setup.err.log`.
-- The current firmware defaults ESP32-C3 Wi-Fi transmit power to 8.5 dBm to improve connection stability on some development boards.
+- The current firmware uses the ESP32-C3 SDK default Wi-Fi transmit power, governed by PHY and country configuration.
 
 ### Wireless mode does not respond
 

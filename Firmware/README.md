@@ -51,7 +51,6 @@ Edit `include/config.h`:
 | `LINK_TIMEOUT_MS` | `6000` | Desktop heartbeat timeout |
 | `WIFI_CONNECT_TIMEOUT_MS` | `15000` | Blocking connect timeout used only during USB provisioning validation |
 | `WIFI_RECONNECT_INTERVAL_MS` | `10000` | Non-blocking saved Wi-Fi retry interval |
-| `WIFI_MAX_TX_POWER_QDBM` | `34` | ESP-IDF quarter-dBm units; 34 means 8.5 dBm |
 | `DEFAULT_TRANSPORT_MODE` | `AUTO` | Default mode when NVS has none |
 | `DEBUG_SERIAL` | `false` | Default debug logging; keep disabled for standalone wireless operation |
 

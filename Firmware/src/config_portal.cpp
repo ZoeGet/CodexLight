@@ -182,9 +182,8 @@ void ConfigPortal::startSavedConnect(const String& ssid, const String& password)
   WiFi.setAutoReconnect(true);
   esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
   esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT20);
-  esp_wifi_set_max_tx_power(WIFI_MAX_TX_POWER_QDBM);
   lastDisconnectReason_ = 0;
-  logNetwork("Starting saved Wi-Fi " + ssid + " tx_power_qdbm=" + String(WIFI_MAX_TX_POWER_QDBM));
+  logNetwork("Starting saved Wi-Fi " + ssid);
   WiFi.begin(ssid.c_str(), password.c_str());
 }
 
@@ -196,12 +195,10 @@ bool ConfigPortal::connectTo(const String& ssid, const String& password) {
   WiFi.setAutoReconnect(false);
   esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
   esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT20);
-  esp_wifi_set_max_tx_power(WIFI_MAX_TX_POWER_QDBM);
   WiFi.disconnect(true, true);
   delay(300);
   lastDisconnectReason_ = 0;
-  logNetwork("Connecting to " + ssid + " password_len=" + String(password.length()) +
-             " tx_power_qdbm=" + String(WIFI_MAX_TX_POWER_QDBM));
+  logNetwork("Connecting to " + ssid + " password_len=" + String(password.length()));
 
   WiFi.begin(ssid.c_str(), password.c_str());
   unsigned long started = millis();

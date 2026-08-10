@@ -141,7 +141,7 @@ Wi-Fi notes:
 - Credentials are stored only after the STA interface reaches `WL_CONNECTED`.
 - Saved Wi-Fi starts non-blockingly at boot, so LED diagnostics and the main loop continue even when the AP is unavailable.
 - Failed saved Wi-Fi connections keep credentials and retry every 10 seconds.
-- ESP32-C3 transmit power is limited to `WIFI_MAX_TX_POWER_QDBM = 34` (8.5 dBm) to improve wireless stability on compact development boards.
+- ESP32-C3 uses the SDK default transmit power governed by PHY and country configuration.
 - Default debug serial output is disabled for standalone wireless operation.
 
 Startup flow:
@@ -195,7 +195,7 @@ CODEXLIGHT/1 HELLO mac=<MAC> mode=<MODE>
 
 ## Troubleshooting
 
-- Wi-Fi setup fails: check `Bridge/logs/wifi_setup.out.log` and `.err.log`, close PlatformIO Monitor, verify 2.4 GHz Wi-Fi, and confirm firmware uses `WIFI_MAX_TX_POWER_QDBM = 34`.
+- Wi-Fi setup fails: check `Bridge/logs/wifi_setup.out.log` and `.err.log`, close PlatformIO Monitor, and verify 2.4 GHz Wi-Fi.
 - Wireless does not update: confirm same LAN, allow UDP 4210 through firewall, and restart the tray to rediscover the device.
 - Slow yellow blink: Wi-Fi is connected and the firmware is waiting for desktop heartbeats; start the tray.
 - Red double-blink: saved Wi-Fi exists but connection is still failing or reconnecting.

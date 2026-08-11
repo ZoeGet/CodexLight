@@ -85,6 +85,10 @@ Bridge 兼容 Codex 会话日志中的普通工具调用和自定义工具调用
 
 ## 硬件
 
+<img src="Hardware/Images/焊接.png" width="800" />
+
+上图为当前一体化主板的正反面焊接实物，可见 ESP32-C3FH4、Type-C、电池接口与开关、天线、ETA6093S2F 电源区域以及三颗独立 WS2812B 状态灯。
+
 <img src="Hardware/Images/schematic.png" width="800" />
 
 当前硬件是围绕 ESP32-C3FH4 设计的一体化主板，完整原理图见 [Hardware/Schematic/Schematic.pdf](Hardware/Schematic/Schematic.pdf)。

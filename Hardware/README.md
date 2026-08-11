@@ -30,6 +30,14 @@ This directory contains the CodexLight bill of materials, schematic, PCB source 
 
 The three LEDs use independent data lines, not a chained strip. The LED supply and ESP32-C3 must share ground, and a stable 5 V supply is required.
 
+## Assembly Photo / 焊接实物
+
+<img src="Images/焊接.png" width="800" />
+
+图片展示当前一体化主板正反面的焊接结果，包括主控、射频、USB、电池管理、稳压和三颗状态灯区域。
+
+The image shows the assembled front and back sides of the current all-in-one board, including the MCU, RF, USB, battery-management, regulator, and status-LED sections.
+
 ## Standalone Power / 独立供电
 
 纯无线使用时，可以通过 Type-C/稳定 5 V 电源供电，也可以从 MX1.25 接口接入带保护的单节锂电池。ETA6093S2F 负责单节锂电池开关充电和 5 V 同步升压，TLV75733PDBVR 再生成 ESP32-C3FH4 使用的 3.3 V。接入电池前必须核对接口极性。

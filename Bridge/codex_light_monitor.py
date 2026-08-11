@@ -639,7 +639,7 @@ def handle_session_event(ms: MonitorState, event: dict) -> None:
     if event_type != "response_item":
         return
 
-    if payload_type == "function_call":
+    if payload_type in {"function_call", "custom_tool_call"}:
         call_id = str(payload.get("call_id") or payload.get("id") or "unknown")
         name = str(payload.get("name") or "function_call")
         ms.pending_calls[call_id] = name
@@ -651,7 +651,7 @@ def handle_session_event(ms: MonitorState, event: dict) -> None:
             set_state(ms, STATE_RED, f"tool_call:{name}")
         return
 
-    if payload_type == "function_call_output":
+    if payload_type in {"function_call_output", "custom_tool_call_output"}:
         call_id = str(payload.get("call_id") or "unknown")
         name = ms.pending_calls.pop(call_id, "tool")
         was_approval = ms.pending_approvals.pop(call_id, None) is not None

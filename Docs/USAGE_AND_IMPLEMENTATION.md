@@ -123,6 +123,8 @@ It sends only state colors to the device.
 | Approval, permission, or explicit user input needed | `YELLOW` |
 | `task_complete` or `turn_aborted` | `GREEN` |
 
+Session parsing accepts both legacy `function_call` / `function_call_output` and current `custom_tool_call` / `custom_tool_call_output` events. Calls containing `require_escalated`, `sandbox_permissions`, `request_user_input`, or another approval/permission marker remain `YELLOW` until the matching output event resolves the wait.
+
 The tray Wi-Fi setup path pauses the monitor, runs a one-shot `--wifi-config` child process, writes logs to `Bridge/logs/wifi_setup.*.log`, then restarts the monitor.
 
 ## Firmware Implementation

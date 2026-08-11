@@ -14,7 +14,7 @@ This is an independent community project and is not officially affiliated with o
 - The tray app provides `Configure WiFi`, which sends SSID/password to the device over USB.
 - Wi-Fi credentials are saved to ESP32 NVS only after a successful connection. Bad credentials do not overwrite the previous working setup.
 - Saved Wi-Fi connects non-blockingly at boot and keeps retrying after disconnects.
-- ESP32-C3 Wi-Fi transmit power defaults to 8.5 dBm to improve wireless stability on the current hardware.
+- ESP32-C3 uses the SDK default Wi-Fi transmit power, governed by PHY and country configuration.
 - Standalone operation does not depend on USB serial. The device can run from its battery connector or a stable 5 V supply in wireless mode.
 - Persistent `AUTO`, `WIRED`, and `WIRELESS` transport modes are supported.
 - `Bridge/start_codex_light_tray.vbs` starts the tray hidden and defaults to wireless mode.
@@ -27,6 +27,8 @@ This is an independent community project and is not officially affiliated with o
 | `RED` | Reasoning, responding, running tools, or processing a task | Red | GPIO7 |
 | `YELLOW` | Waiting for approval, permission, or explicit user input | Yellow | GPIO5 |
 | No desktop heartbeat | No valid USB/UDP heartbeat for 6 seconds | Slow yellow blink | GPIO5 |
+
+The Bridge supports both regular and custom tool-call events in Codex session logs, so system permission prompts, sandbox approvals, and explicit user-input waits enter the yellow state.
 
 When the first valid desktop heartbeat arrives, the green LED blinks for two seconds as a connection indication, then the real state is shown. Completed green stays latched until the next task starts, a waiting state appears, or the connection is lost.
 

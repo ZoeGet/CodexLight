@@ -21,6 +21,8 @@ The Bridge runs on the Windows computer hosting Codex Desktop. It reads local Co
 | A tool call requires approval, permission, or user input | `YELLOW` |
 | `task_complete` or `turn_aborted` | `GREEN` |
 
+The Bridge supports both `function_call` / `function_call_output` and `custom_tool_call` / `custom_tool_call_output`. When a tool call contains `require_escalated`, `sandbox_permissions`, `request_user_input`, or another approval/permission marker, the state remains `YELLOW` until the matching tool output arrives.
+
 The Bridge sends only color states. It never sends Codex message text, tool output, API keys, or login tokens to the device.
 
 ## Dependency

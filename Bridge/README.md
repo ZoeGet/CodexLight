@@ -21,6 +21,8 @@ Bridge 运行在 Windows 电脑上，读取本机 Codex Desktop 会话日志，�
 | 工具调用需要审批、权限或用户输入 | `YELLOW` |
 | `task_complete` 或 `turn_aborted` | `GREEN` |
 
+Bridge 同时兼容 `function_call` / `function_call_output` 和 `custom_tool_call` / `custom_tool_call_output`。当工具调用包含 `require_escalated`、`sandbox_permissions`、`request_user_input` 或其他审批/权限标记时，状态保持为 `YELLOW`，直到对应的工具输出到达。
+
 Bridge 只发送颜色状态，不发送 Codex 消息正文、工具输出、API Key 或登录令牌。
 
 ## 依赖

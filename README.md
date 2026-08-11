@@ -14,7 +14,7 @@ CodexLight 是一套基于 ESP32-C3FH4 的 Codex Desktop 状态灯。Windows 端
 - 托盘程序提供 `Configure WiFi`，通过 USB 把 SSID 和密码发送给设备。
 - Wi-Fi 只在连接成功后写入 ESP32 NVS；错误密码不会覆盖旧配置。
 - 已保存的 Wi-Fi 会在开机后非阻塞连接，并在断线后持续重试。
-- ESP32-C3 Wi-Fi 发射功率默认限制为 8.5 dBm，以提升当前硬件的无线连接稳定性。
+- ESP32-C3 使用 SDK 默认的 Wi-Fi 发射功率，由 PHY 和地区配置决定。
 - 无电脑供电启动不依赖 USB 串口，可使用板载电池接口或稳定 5 V 电源进行纯无线摆放。
 - 支持 `AUTO`、`WIRED`、`WIRELESS` 三种持久化通信模式。
 - `Bridge/start_codex_light_tray.vbs` 默认以无线模式隐藏启动，不保留 PowerShell 窗口。
@@ -27,6 +27,8 @@ CodexLight 是一套基于 ESP32-C3FH4 的 Codex Desktop 状态灯。Windows 端
 | `RED` | 正在思考、回复、运行工具或处理任务 | 红灯 | GPIO7 |
 | `YELLOW` | 等待审批、权限确认或用户输入 | 黄灯 | GPIO5 |
 | 未收到电脑心跳 | 6 秒内没有有效 USB/UDP 心跳 | 黄灯慢闪 | GPIO5 |
+
+Bridge 兼容 Codex 会话日志中的普通工具调用和自定义工具调用事件，因此系统权限审批、沙箱授权和显式用户输入等待都能进入黄色状态。
 
 首次收到有效电脑心跳时，绿灯会闪烁 2 秒作为连接提示，然后显示真实状态。任务完成后的绿色会保持到下一次任务开始、进入等待状态或连接断开。
 

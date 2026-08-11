@@ -1,0 +1,7 @@
+# Hardware exports and binary assets must not receive line-ending conversion.
+*.pdf binary
+*.png binary
+*.xls binary
+*.zip binary
+*.stl binary
+*.epro2 binary

@@ -3,6 +3,7 @@
 
 # Keep repository metadata needed by Git users.
 !.gitignore
+!.gitattributes
 !README.md
 !README.en.md
 !USAGE.md

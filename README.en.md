@@ -95,7 +95,7 @@ The current hardware is a custom all-in-one board built around the ESP32-C3FH4. 
 | Wireless RF | AN9520-245 2.4 GHz antenna with an R9/C11/C12 matching footprint |
 | USB Type-C | Native USB D+/D- connect to GPIO19/GPIO18 through 22 Ω resistors; CC1 and CC2 each use a 5.1 kΩ pull-down |
 | USB power | VBUS feeds the system +5 V rail through a BAT60JFILM Schottky diode |
-| Battery power | ETA9697E8A provides single-cell linear charging and 5 V boost power with a 2.2 µH inductor, MX1.25 battery connector, and power switch |
+| Battery power | ETA6093S2F provides switch-mode charging for a single-cell Li-ion battery and synchronous 5 V boost power, with a 2.2 µH inductor, 22 µF output capacitor, MX1.25 battery connector, and power switch |
 | 3.3 V rail | TLV75733PDBVR regulates +5 V down to +3.3 V for the ESP32-C3FH4 and logic circuitry |
 | Status LEDs | Yellow on GPIO5, green on GPIO6, and red on GPIO7; each data line has a 330 Ω resistor and each LED has 100 nF decoupling |
 
@@ -108,7 +108,7 @@ The left image shows the ESP32-C3FH4 MCU, RF, crystal, and RST/BOOT circuits. Th
 
 The three WS2812B LEDs use independent data inputs; they are not a chained strip. The LEDs run from +5 V while the ESP32-C3FH4 runs from +3.3 V, and both rails must share ground. The firmware uses `NEO_GRB + NEO_KHZ800`. Default brightness is `DEFAULT_BRIGHTNESS = 50` and can be configured in [Firmware/include/config.h](Firmware/include/config.h).
 
-The schematic leaves the ETA9697E8A NTC and STAT pins without external temperature sensing or a status indicator. Verify battery connector polarity, use a protected cell, and calculate the charge current from R5 and the selected battery capacity. See the [open-source platform project description](Docs/立创开源平台项目说明.md) for detailed circuit and assembly notes.
+The ETA6093S2F `LED` pin drives LED1 and LED2 through R5 (1 kΩ) to indicate charging and boost operation. L1 (2.2 µH) connects `SW` to `VBAT`, C4 (22 µF) filters the +5 V output, and C3 (10 µF) decouples the battery side. Verify battery connector polarity and use a protected cell. See the [open-source platform project description](Docs/立创开源平台项目说明.md) for detailed circuit and assembly notes.
 
 ## Repository Layout
 

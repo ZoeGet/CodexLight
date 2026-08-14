@@ -13,12 +13,16 @@ pyserial must be installed in the Python environment running this script.
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
+import os
 import re
 import socket
 import sqlite3
+import subprocess
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Iterable, Optional
 
@@ -30,6 +34,104 @@ DEFAULT_CONFIG_PATH = Path(__file__).with_name("config.local.json")
 SERIAL_READY_DELAY_SECONDS = 2.0
 SERIAL_MODE_RETRY_SECONDS = 1.0
 SERIAL_RESET_DELAY_SECONDS = 0.15
+SESSION_DISCOVERY_INTERVAL_SECONDS = 1.0
+NETWORK_REFRESH_INTERVAL_SECONDS = 30.0
+UDP_DISCOVERY_GRACE_SECONDS = 6.0
+UDP_SUBNET_PROBE_INTERVAL_SECONDS = 2.0
+UDP_SUBNET_PROBE_BATCH_SIZE = 24
+UDP_SUBNET_PROBE_MAX_ADDRESSES = 1024
+
+
+def is_lan_address(address: ipaddress.IPv4Address) -> bool:
+    lan_ranges = (
+        ipaddress.IPv4Network("10.0.0.0/8"),
+        ipaddress.IPv4Network("172.16.0.0/12"),
+        ipaddress.IPv4Network("192.168.0.0/16"),
+    )
+    return any(address in network for network in lan_ranges)
+
+
+def parse_windows_ipv4_routes(route_output: str) -> list[tuple[ipaddress.IPv4Network, ipaddress.IPv4Address]]:
+    rows: list[tuple[ipaddress.IPv4Address, ipaddress.IPv4Address, str, ipaddress.IPv4Address]] = []
+    for line in route_output.splitlines():
+        parts = line.split()
+        if len(parts) < 5:
+            continue
+        try:
+            destination = ipaddress.IPv4Address(parts[0])
+            netmask = ipaddress.IPv4Address(parts[1])
+            interface = ipaddress.IPv4Address(parts[3])
+        except ipaddress.AddressValueError:
+            continue
+        rows.append((destination, netmask, parts[2], interface))
+
+    default_interfaces = {
+        interface
+        for destination, netmask, _gateway, interface in rows
+        if destination == ipaddress.IPv4Address("0.0.0.0")
+        and netmask == ipaddress.IPv4Address("0.0.0.0")
+        and is_lan_address(interface)
+    }
+
+    networks: list[tuple[ipaddress.IPv4Network, ipaddress.IPv4Address]] = []
+    for destination, netmask, _gateway, interface in rows:
+        if not is_lan_address(interface):
+            continue
+        if default_interfaces and interface not in default_interfaces:
+            continue
+        if netmask in {
+            ipaddress.IPv4Address("0.0.0.0"),
+            ipaddress.IPv4Address("255.255.255.255"),
+        }:
+            continue
+        try:
+            network = ipaddress.IPv4Network(f"{destination}/{netmask}", strict=False)
+        except (ipaddress.AddressValueError, ipaddress.NetmaskValueError):
+            continue
+        if network.network_address != destination or interface not in network:
+            continue
+        item = (network, interface)
+        if item not in networks:
+            networks.append(item)
+    return networks
+
+
+def discover_local_ipv4_networks() -> list[tuple[ipaddress.IPv4Network, ipaddress.IPv4Address]]:
+    if os.name == "nt":
+        try:
+            result = subprocess.run(
+                ["route", "print", "-4"],
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=3,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            result = None
+        if result is not None and result.stdout:
+            networks = parse_windows_ipv4_routes(result.stdout)
+            if networks:
+                return networks
+
+    # Portable fallback: collect LAN addresses and assume /24 only when the
+    # operating system cannot expose its route table through the path above.
+    networks = []
+    try:
+        addresses = socket.gethostbyname_ex(socket.gethostname())[2]
+    except OSError:
+        addresses = []
+    for value in addresses:
+        try:
+            interface = ipaddress.IPv4Address(value)
+        except ipaddress.AddressValueError:
+            continue
+        if not is_lan_address(interface):
+            continue
+        item = (ipaddress.IPv4Network(f"{interface}/24", strict=False), interface)
+        if item not in networks:
+            networks.append(item)
+    return networks
 
 
 @dataclass
@@ -82,6 +184,12 @@ class StateEmitter:
         self.last_udp_send = 0.0
         self.last_udp_broadcast_send = 0.0
         self.last_udp_subnet_probe = 0.0
+        self.last_udp_response = 0.0
+        self.last_logged_udp_targets: tuple[str, ...] = ()
+        self.last_network_refresh = 0.0
+        self.local_networks: list[tuple[ipaddress.IPv4Network, ipaddress.IPv4Address]] = []
+        self.subnet_probe_hosts: list[str] = []
+        self.subnet_probe_index = 0
         self.last_serial_send = 0.0
         self.last_udp_listen = 0.0
         self.serial_mode = firmware_mode or ("AUTO" if self.udp_enabled else "WIRED")
@@ -395,36 +503,80 @@ class StateEmitter:
             if self.device_ip:
                 targets.append(self.device_ip)
             if not self.device_ip or now - self.last_udp_broadcast_send >= self.udp_interval:
-                targets.extend(self.udp_broadcast_targets())
+                broadcast_targets = self.udp_broadcast_targets()
+                targets.extend(broadcast_targets)
                 self.last_udp_broadcast_send = now
-                print(
-                    f"{time.strftime('%Y-%m-%d %H:%M:%S')} UDP targets {', '.join(unique_ordered(targets))}",
-                    flush=True,
-                )
-            if self.device_ip and now - self.last_udp_subnet_probe >= 10.0:
-                targets.extend(self.udp_subnet_probe_targets())
+                target_signature = tuple(unique_ordered(broadcast_targets))
+                if target_signature != self.last_logged_udp_targets:
+                    self.last_logged_udp_targets = target_signature
+                    print(
+                        f"{time.strftime('%Y-%m-%d %H:%M:%S')} UDP targets "
+                        f"{', '.join(target_signature)}",
+                        flush=True,
+                    )
+            probe_targets = []
+            if (
+                now - self.last_udp_response >= UDP_DISCOVERY_GRACE_SECONDS
+                and now - self.last_udp_subnet_probe >= UDP_SUBNET_PROBE_INTERVAL_SECONDS
+            ):
+                probe_targets = self.udp_subnet_probe_targets()
                 self.last_udp_subnet_probe = now
             for target in unique_ordered(targets):
                 for payload in payloads:
                     self.udp_socket.sendto(payload, (target, self.udp_port))
+            for target in probe_targets:
+                self.udp_socket.sendto(payloads[1], (target, self.udp_port))
             self.last_udp_send = now
         except OSError as exc:
             print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} UDP send failed: {exc}", flush=True)
 
     def udp_broadcast_targets(self) -> list[str]:
         targets = [self.udp_host, "255.255.255.255"]
-        if self.device_ip:
-            octets = self.device_ip.split(".")
-            if len(octets) == 4:
-                targets.append(".".join(octets[:3] + ["255"]))
+        self.refresh_local_networks()
+        targets.extend(str(network.broadcast_address) for network, _interface in self.local_networks)
         return unique_ordered(targets)
 
     def udp_subnet_probe_targets(self) -> list[str]:
-        octets = self.device_ip.split(".") if self.device_ip else []
-        if len(octets) != 4:
+        self.refresh_local_networks()
+        if not self.subnet_probe_hosts:
             return []
-        prefix = ".".join(octets[:3])
-        return [f"{prefix}.{host}" for host in range(1, 255)]
+
+        start = self.subnet_probe_index
+        end = min(start + UDP_SUBNET_PROBE_BATCH_SIZE, len(self.subnet_probe_hosts))
+        batch = self.subnet_probe_hosts[start:end]
+        self.subnet_probe_index = 0 if end >= len(self.subnet_probe_hosts) else end
+        return batch
+
+    def refresh_local_networks(self) -> None:
+        now = time.monotonic()
+        if (
+            self.last_network_refresh > 0.0
+            and now - self.last_network_refresh < NETWORK_REFRESH_INTERVAL_SECONDS
+        ):
+            return
+
+        discovered = discover_local_ipv4_networks()
+        self.last_network_refresh = now
+        if discovered == self.local_networks:
+            return
+
+        self.local_networks = discovered
+        self.subnet_probe_hosts = []
+        self.subnet_probe_index = 0
+        for network, interface in discovered:
+            if network.num_addresses > UDP_SUBNET_PROBE_MAX_ADDRESSES:
+                continue
+            self.subnet_probe_hosts.extend(
+                str(address) for address in network.hosts() if address != interface
+            )
+
+        if discovered:
+            descriptions = [f"{interface}/{network.prefixlen}" for network, interface in discovered]
+            print(
+                f"{time.strftime('%Y-%m-%d %H:%M:%S')} UDP local networks "
+                f"{', '.join(descriptions)}",
+                flush=True,
+            )
 
     def listen_udp_discovery(self) -> None:
         if self.udp_socket is None:
@@ -458,6 +610,7 @@ class StateEmitter:
             if self.device_mac and mac != self.device_mac:
                 continue
 
+            self.last_udp_response = now
             if sender[0] != self.device_ip:
                 self.device_ip = sender[0]
                 self.config["last_device_ip"] = self.device_ip
@@ -530,14 +683,30 @@ def iter_jsonl_files(root: Path, max_age_days: int) -> Iterable[Path]:
         return []
 
     cutoff = time.time() - max_age_days * 24 * 60 * 60
-    files = []
-    for path in root.rglob("*.jsonl"):
+    files: list[Path] = []
+    dated_layout_found = False
+    today = datetime.now().date()
+
+    # The default Codex session layout is YYYY/MM/DD. Looking only in the
+    # relevant day directories avoids recursively walking the whole history on
+    # every poll. Custom layouts still use the recursive fallback.
+    for day_offset in range(max_age_days + 2):
+        day = today - timedelta(days=day_offset)
+        day_root = root / f"{day.year:04d}" / f"{day.month:02d}" / f"{day.day:02d}"
+        if not day_root.is_dir():
+            continue
+        dated_layout_found = True
+        files.extend(day_root.glob("*.jsonl"))
+
+    candidates = files if dated_layout_found else root.rglob("*.jsonl")
+    recent_files = []
+    for path in candidates:
         try:
             if path.stat().st_mtime >= cutoff:
-                files.append(path)
+                recent_files.append(path)
         except OSError:
             continue
-    return sorted(files, key=lambda p: p.stat().st_mtime)
+    return sorted(recent_files, key=lambda path: path.name)
 
 
 def read_new_lines(path: Path, offsets: Dict[Path, int], from_start: bool) -> Iterable[str]:
@@ -821,6 +990,13 @@ def main() -> int:
 
     ms = MonitorState()
     offsets: Dict[Path, int] = {}
+    session_paths = list(iter_jsonl_files(args.sessions_root, args.max_age_days))
+    for path in session_paths:
+        try:
+            offsets[path] = 0 if args.from_start else path.stat().st_size
+        except OSError:
+            continue
+    last_session_discovery = time.monotonic()
 
     con = connect_sqlite(args.sqlite)
     last_sqlite_id = sqlite_max_id(con) if con is not None else 0
@@ -828,7 +1004,18 @@ def main() -> int:
     emitter.emit(ms.state, ms.reason)
 
     while True:
-        for path in iter_jsonl_files(args.sessions_root, args.max_age_days):
+        now = time.monotonic()
+        if now - last_session_discovery >= SESSION_DISCOVERY_INTERVAL_SECONDS:
+            discovered_paths = list(iter_jsonl_files(args.sessions_root, args.max_age_days))
+            for path in discovered_paths:
+                if path not in offsets:
+                    # A session created after startup must be read from its
+                    # beginning or its initial task_started event is lost.
+                    offsets[path] = 0
+            session_paths = discovered_paths
+            last_session_discovery = now
+
+        for path in session_paths:
             for line in read_new_lines(path, offsets, args.from_start):
                 event = json_payload(line)
                 if event is not None:

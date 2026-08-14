@@ -13,6 +13,13 @@ $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
+$createdNew = $false
+$singleInstanceMutex = New-Object System.Threading.Mutex($true, "Local\CodexLightTray", [ref]$createdNew)
+if (-not $createdNew) {
+  $singleInstanceMutex.Dispose()
+  exit 0
+}
+
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 if ([string]::IsNullOrWhiteSpace($WorkDir)) {
   $WorkDir = Split-Path -Parent $scriptDir
@@ -73,6 +80,66 @@ function Resolve-PythonPath {
 $pythonPath = Resolve-PythonPath -Requested $Python
 $monitorProcess = $null
 $currentMode = $ConnectionMode
+$wifiSetupState = $null
+
+function Complete-WifiSetup {
+  param([bool]$TimedOut = $false)
+
+  $state = $script:wifiSetupState
+  if (-not $state -or $state.Completed) {
+    return
+  }
+
+  $state.Completed = $true
+  $state.Timer.Stop()
+
+  $processExited = $false
+  try {
+    $state.Process.Refresh()
+    $processExited = $state.Process.HasExited
+  } catch {
+    $processExited = $true
+  }
+
+  if ($TimedOut -and -not $processExited) {
+    try {
+      $state.Process.Kill()
+      $state.Process.WaitForExit(1000) | Out-Null
+    } catch {
+      # Process may have exited between the timeout check and Kill.
+    }
+    Add-Content -LiteralPath $wifiSetupErrLog -Value "WIFI_SETUP_ERROR TRAY_TIMEOUT" -ErrorAction SilentlyContinue
+  }
+
+  $succeeded = $false
+  try {
+    $state.Process.Refresh()
+    $succeeded = $state.Process.HasExited -and $state.Process.ExitCode -eq 0
+  } catch {
+    $succeeded = $false
+  }
+
+  Remove-Item -LiteralPath $state.ConfigPath -Force -ErrorAction SilentlyContinue
+  try {
+    Start-Monitor
+  } catch {
+    Add-Content -LiteralPath $wifiSetupErrLog -Value ("MONITOR_RESTART_ERROR " + $_.Exception.Message) -ErrorAction SilentlyContinue
+  }
+
+  $state.SaveButton.Enabled = $true
+  $state.CancelButton.Enabled = $true
+  $script:wifiSetupState = $null
+
+  if ($succeeded) {
+    [System.Windows.Forms.MessageBox]::Show("WiFi saved and connected.", "CodexLight WiFi", "OK", "Information") | Out-Null
+    $state.Form.Close()
+    return
+  }
+
+  $details = Get-RecentLogText -Paths @($wifiSetupOutLog, $wifiSetupErrLog)
+  [System.Windows.Forms.MessageBox]::Show("WiFi setup failed." + [Environment]::NewLine + [Environment]::NewLine + $details, "CodexLight WiFi", "OK", "Error") | Out-Null
+  $state.StatusLabel.Text = if ($TimedOut) { "Setup timed out." } else { "Setup failed." }
+}
 
 function Invoke-WifiSetup {
   $form = New-Object System.Windows.Forms.Form
@@ -125,6 +192,45 @@ function Invoke-WifiSetup {
   $cancelButton.Add_Click({ $form.Close() })
   [void]$form.Controls.Add($cancelButton)
 
+  $setupTimer = New-Object System.Windows.Forms.Timer
+  $setupTimer.Interval = 250
+  $setupTimer.Add_Tick({
+    $state = $script:wifiSetupState
+    if (-not $state -or $state.Completed) {
+      return
+    }
+
+    try {
+      $state.Process.Refresh()
+      if ($state.Process.HasExited) {
+        Complete-WifiSetup
+        return
+      }
+    } catch {
+      Complete-WifiSetup
+      return
+    }
+
+    $elapsed = [Math]::Max(0, [int]((Get-Date) - $state.StartedAt).TotalSeconds)
+    $state.StatusLabel.Text = "Connecting... ${elapsed}s"
+    if ((Get-Date) -ge $state.Deadline) {
+      Complete-WifiSetup -TimedOut $true
+    }
+  })
+
+  $form.Add_FormClosing({
+    param($sender, $eventArgs)
+    if ($script:wifiSetupState -and -not $script:wifiSetupState.Completed) {
+      $eventArgs.Cancel = $true
+      $statusLabel.Text = "Connection is still being checked..."
+    }
+  })
+
+  $form.Add_FormClosed({
+    $setupTimer.Stop()
+    $setupTimer.Dispose()
+  })
+
   $saveButton.Add_Click({
     $ssid = $ssidBox.Text.Trim()
     $password = $passwordBox.Text
@@ -133,62 +239,61 @@ function Invoke-WifiSetup {
       return
     }
 
-    $statusLabel.Text = "Configuring..."
-    $form.Refresh()
-    Stop-Monitor
-    Stop-BridgeMonitorProcesses
-    Start-Sleep -Milliseconds 500
-
-    Remove-Item -LiteralPath $wifiSetupOutLog, $wifiSetupErrLog -Force -ErrorAction SilentlyContinue
+    $statusLabel.Text = "Opening USB connection..."
+    $saveButton.Enabled = $false
+    $cancelButton.Enabled = $false
 
     $wifiConfigPath = Join-Path $env:TEMP ("codexlight_wifi_{0}.json" -f ([Guid]::NewGuid().ToString("N")))
-    @{ ssid = $ssid; password = $password } |
-      ConvertTo-Json -Compress |
-      Set-Content -LiteralPath $wifiConfigPath -Encoding UTF8
+    try {
+      Stop-Monitor
+      Remove-Item -LiteralPath $wifiSetupOutLog, $wifiSetupErrLog -Force -ErrorAction SilentlyContinue
 
-    $args = @(
-      $monitorScript,
-      "--serial", $SerialPort,
-      "--baud", $SerialBaud.ToString(),
-      "--wifi-config", $wifiConfigPath
-    )
+      @{ ssid = $ssid; password = $password } |
+        ConvertTo-Json -Compress |
+        Set-Content -LiteralPath $wifiConfigPath -Encoding UTF8
 
-    $process = Start-Process `
-      -FilePath $pythonPath `
-      -ArgumentList $args `
-      -WorkingDirectory $WorkDir `
-      -WindowStyle Hidden `
-      -RedirectStandardOutput $wifiSetupOutLog `
-      -RedirectStandardError $wifiSetupErrLog `
-      -PassThru
+      $args = @(
+        $monitorScript,
+        "--serial", $SerialPort,
+        "--baud", $SerialBaud.ToString(),
+        "--wifi-config", $wifiConfigPath
+      )
 
-    $deadline = (Get-Date).AddSeconds(60)
-    while (-not $process.HasExited -and (Get-Date) -lt $deadline) {
-      $statusLabel.Text = "Configuring..."
-      [System.Windows.Forms.Application]::DoEvents()
-      Start-Sleep -Milliseconds 250
-    }
+      $process = Start-Process `
+        -FilePath $pythonPath `
+        -ArgumentList $args `
+        -WorkingDirectory $WorkDir `
+        -WindowStyle Hidden `
+        -RedirectStandardOutput $wifiSetupOutLog `
+        -RedirectStandardError $wifiSetupErrLog `
+        -PassThru
 
-    if (-not $process.HasExited) {
-      try {
-        $process.Kill()
-        $process.WaitForExit(3000) | Out-Null
-      } catch {
-        # Process may have exited between the timeout check and Kill.
+      $script:wifiSetupState = [pscustomobject]@{
+        Form = $form
+        StatusLabel = $statusLabel
+        SaveButton = $saveButton
+        CancelButton = $cancelButton
+        Timer = $setupTimer
+        Process = $process
+        ConfigPath = $wifiConfigPath
+        StartedAt = Get-Date
+        Deadline = (Get-Date).AddSeconds(60)
+        Completed = $false
       }
-      Add-Content -LiteralPath $wifiSetupErrLog -Value "WIFI_SETUP_ERROR TRAY_TIMEOUT"
-    }
-
-    Remove-Item -LiteralPath $wifiConfigPath -Force -ErrorAction SilentlyContinue
-
-    Start-Monitor
-    if ($process.HasExited -and $process.ExitCode -eq 0) {
-      [System.Windows.Forms.MessageBox]::Show("WiFi saved and connected.", "CodexLight WiFi", "OK", "Information") | Out-Null
-      $form.Close()
-    } else {
+      $setupTimer.Start()
+    } catch {
+      Remove-Item -LiteralPath $wifiConfigPath -Force -ErrorAction SilentlyContinue
+      Add-Content -LiteralPath $wifiSetupErrLog -Value ("WIFI_SETUP_ERROR TRAY_START_FAILED " + $_.Exception.Message) -ErrorAction SilentlyContinue
+      try {
+        Start-Monitor
+      } catch {
+        Add-Content -LiteralPath $wifiSetupErrLog -Value ("MONITOR_RESTART_ERROR " + $_.Exception.Message) -ErrorAction SilentlyContinue
+      }
+      $saveButton.Enabled = $true
+      $cancelButton.Enabled = $true
+      $statusLabel.Text = "Setup could not start."
       $details = Get-RecentLogText -Paths @($wifiSetupOutLog, $wifiSetupErrLog)
       [System.Windows.Forms.MessageBox]::Show("WiFi setup failed." + [Environment]::NewLine + [Environment]::NewLine + $details, "CodexLight WiFi", "OK", "Error") | Out-Null
-      $statusLabel.Text = "Setup failed."
     }
   })
 
@@ -256,21 +361,6 @@ function Stop-Monitor {
     }
   }
   $script:monitorProcess = $null
-}
-
-function Stop-BridgeMonitorProcesses {
-  Get-CimInstance Win32_Process |
-    Where-Object {
-      ($_.Name -match '^(python|pythonw)\.exe$') -and
-      ($_.CommandLine -like "*$monitorScript*")
-    } |
-    ForEach-Object {
-      try {
-        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-      } catch {
-        # Process may already be gone.
-      }
-    }
 }
 
 function Restart-Monitor {
@@ -357,7 +447,30 @@ $exitItem.Add_Click({
 $notifyIcon.ContextMenuStrip = $menu
 $notifyIcon.Add_DoubleClick({ Start-Process explorer.exe $logDir })
 
-Update-ModeDisplay
-Start-Monitor
-
-[System.Windows.Forms.Application]::Run()
+try {
+  Update-ModeDisplay
+  Start-Monitor
+  [System.Windows.Forms.Application]::Run()
+} finally {
+  $wifiSetupRunning = $false
+  if ($script:wifiSetupState) {
+    try {
+      $wifiSetupRunning = -not $script:wifiSetupState.Process.HasExited
+    } catch {
+      $wifiSetupRunning = $false
+    }
+  }
+  if ($wifiSetupRunning) {
+    try {
+      $script:wifiSetupState.Process.Kill()
+    } catch {
+      # Process may already be gone.
+    }
+    Remove-Item -LiteralPath $script:wifiSetupState.ConfigPath -Force -ErrorAction SilentlyContinue
+  }
+  Stop-Monitor
+  if ($createdNew) {
+    $singleInstanceMutex.ReleaseMutex()
+  }
+  $singleInstanceMutex.Dispose()
+}

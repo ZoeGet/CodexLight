@@ -19,6 +19,8 @@
 !Firmware/**
 !Hardware/
 !Hardware/**
+!Scripts/
+!Scripts/**
 
 # Ignore generated PlatformIO and editor files even inside kept directories.
 .pio/

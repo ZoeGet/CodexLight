@@ -106,6 +106,7 @@ def discover_local_ipv4_networks() -> list[tuple[ipaddress.IPv4Network, ipaddres
                 errors="replace",
                 timeout=3,
                 check=False,
+                creationflags=subprocess.CREATE_NO_WINDOW,
             )
         except (OSError, subprocess.SubprocessError):
             result = None

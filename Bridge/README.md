@@ -27,13 +27,23 @@ Bridge 只发送颜色状态，不发送 Codex 消息正文、工具输出、API
 
 ## 依赖
 
+直接使用已构建的 `CodexLightTray.exe` 不需要另行安装 Python。只有从源码启动或重新构建 EXE 时需要本机 Python；源码启动还需要：
+
 ```powershell
 python -m pip install pyserial
 ```
 
 ## 托盘启动
 
-推荐双击隐藏启动器，默认进入 `WIRELESS` 模式：
+普通用户直接双击单文件程序：
+
+```text
+Bridge\dist\CodexLightTray.exe
+```
+
+EXE 内置 64 位 Python 运行时和串口库，首次启动会释放到 `%LOCALAPPDATA%\CodexLight`，日志和本地设备配置也保存在该目录。首次使用 UDP 时，Windows 防火墙可能询问是否允许网络访问，请允许专用网络。
+
+从源码启动时，推荐双击隐藏启动器，默认进入 `WIRELESS` 模式：
 
 ```text
 Bridge\start_codex_light_tray.vbs
@@ -49,9 +59,17 @@ Bridge\start_codex_light_tray.bat
 
 - `Configure WiFi`：通过 USB 写入路由器 SSID/密码。
 - `Connection mode`：切换 `Auto (wired + wireless)`、`Wired only`、`Wireless only`。
-- `Open log folder`：打开 `Bridge/logs`。
+- `Open log folder`：打开当前运行版本的日志目录；EXE 版为 `%LOCALAPPDATA%\CodexLight\logs`，源码版为 `Bridge\logs`。
 - `Restart monitor`：重启监控进程。
 - `Exit`：退出。
+
+重新构建单文件 EXE：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File Bridge\build_tray_exe.ps1
+```
+
+输出文件为 `Bridge\dist\CodexLightTray.exe`。构建过程使用本机 64 位 Python 和 Windows 自带的 .NET Framework C# 编译器，不需要联网。
 
 ## Wi-Fi 配网
 
@@ -67,12 +85,14 @@ WIFI_SET <ssid><TAB><password>
 WIFI_SET_OK <ssid> <ip>
 ```
 
-失败日志保存到：
+EXE 版失败日志保存到：
 
 ```text
-Bridge\logs\wifi_setup.out.log
-Bridge\logs\wifi_setup.err.log
+%LOCALAPPDATA%\CodexLight\logs\wifi_setup.out.log
+%LOCALAPPDATA%\CodexLight\logs\wifi_setup.err.log
 ```
+
+源码版失败日志保存到 `Bridge\logs`。
 
 命令行配网：
 
@@ -113,10 +133,9 @@ python Bridge\codex_light_monitor.py --serial auto --baud 115200 --udp --udp-por
 
 ## 日志
 
-- `Bridge/logs/codex_light_monitor.out.log`
-- `Bridge/logs/codex_light_monitor.err.log`
-- `Bridge/logs/wifi_setup.out.log`
-- `Bridge/logs/wifi_setup.err.log`
+- EXE 版：`%LOCALAPPDATA%\CodexLight\logs`
+- 源码版：`Bridge\logs`
+- 两种版本均包含 `codex_light_monitor.out.log`、`codex_light_monitor.err.log`、`wifi_setup.out.log`、`wifi_setup.err.log`。
 
 ## 验证
 

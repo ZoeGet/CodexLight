@@ -27,13 +27,23 @@ The Bridge sends only color states. It never sends Codex message text, tool outp
 
 ## Dependency
 
+The built `CodexLightTray.exe` does not require a separate Python installation. Local Python is needed only when running from source or rebuilding the EXE; source mode also requires:
+
 ```powershell
 python -m pip install pyserial
 ```
 
 ## Tray Startup
 
-Recommended hidden launcher. It defaults to `WIRELESS` mode:
+For normal use, double-click the standalone executable:
+
+```text
+Bridge\dist\CodexLightTray.exe
+```
+
+The EXE embeds a 64-bit Python runtime and pyserial. On first launch it extracts runtime files to `%LOCALAPPDATA%\CodexLight`; logs and local device configuration are stored there as well. Windows Firewall may ask for network access the first time UDP is used; allow private networks.
+
+When running from source, use the hidden launcher. It defaults to `WIRELESS` mode:
 
 ```text
 Bridge\start_codex_light_tray.vbs
@@ -49,9 +59,17 @@ Tray menu:
 
 - `Configure WiFi`: write router SSID/password over USB.
 - `Connection mode`: switch between `Auto (wired + wireless)`, `Wired only`, and `Wireless only`.
-- `Open log folder`: open `Bridge/logs`.
+- `Open log folder`: open the active runtime log directory; `%LOCALAPPDATA%\CodexLight\logs` for the EXE and `Bridge\logs` for source mode.
 - `Restart monitor`: restart the monitor process.
 - `Exit`: quit.
+
+Rebuild the standalone EXE with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File Bridge\build_tray_exe.ps1
+```
+
+The output is `Bridge\dist\CodexLightTray.exe`. The build uses local 64-bit Python and the Windows .NET Framework C# compiler, and does not require network access.
 
 ## Wi-Fi Provisioning
 
@@ -67,12 +85,14 @@ On success, the device replies:
 WIFI_SET_OK <ssid> <ip>
 ```
 
-Failure logs are written to:
+EXE failure logs are written to:
 
 ```text
-Bridge\logs\wifi_setup.out.log
-Bridge\logs\wifi_setup.err.log
+%LOCALAPPDATA%\CodexLight\logs\wifi_setup.out.log
+%LOCALAPPDATA%\CodexLight\logs\wifi_setup.err.log
 ```
+
+Source-mode failure logs are written under `Bridge\logs`.
 
 Command-line provisioning:
 
@@ -113,10 +133,9 @@ python Bridge\codex_light_monitor.py --serial auto --baud 115200 --udp --udp-por
 
 ## Logs
 
-- `Bridge/logs/codex_light_monitor.out.log`
-- `Bridge/logs/codex_light_monitor.err.log`
-- `Bridge/logs/wifi_setup.out.log`
-- `Bridge/logs/wifi_setup.err.log`
+- EXE build: `%LOCALAPPDATA%\CodexLight\logs`
+- Source mode: `Bridge\logs`
+- Both contain `codex_light_monitor.out.log`, `codex_light_monitor.err.log`, `wifi_setup.out.log`, and `wifi_setup.err.log`.
 
 ## Verification
 

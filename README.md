@@ -17,7 +17,7 @@ CodexLight 是一套基于 ESP32-C3FH4 的 Codex Desktop 状态灯。Windows 端
 - ESP32-C3 使用 SDK 默认的 Wi-Fi 发射功率，由 PHY 和地区配置决定。
 - 无电脑供电启动不依赖 USB 串口，可使用板载电池接口或稳定 5 V 电源进行纯无线摆放。
 - 支持 `AUTO`、`WIRED`、`WIRELESS` 三种持久化通信模式。
-- `Bridge/start_codex_light_tray.vbs` 默认以无线模式隐藏启动，不保留 PowerShell 窗口。
+- 普通用户直接双击单文件 `Bridge/dist/CodexLightTray.exe`；程序内置 Python 运行时并默认以无线模式驻留系统托盘。
 
 ## 状态定义
 
@@ -34,13 +34,7 @@ Bridge 兼容 Codex 会话日志中的普通工具调用和自定义工具调用
 
 ## 快速开始
 
-1. 安装电脑端依赖：
-
-   ```powershell
-   python -m pip install pyserial
-   ```
-
-2. 编译并烧录固件：
+1. 编译并烧录固件：
 
    ```powershell
    cd Firmware
@@ -48,21 +42,23 @@ Bridge 兼容 Codex 会话日志中的普通工具调用和自定义工具调用
    pio run -t upload --upload-port COM4
    ```
 
-3. 双击启动隐藏托盘，默认进入无线模式：
+2. 双击启动托盘 EXE，默认进入无线模式，无需另行安装 Python：
 
    ```text
-   Bridge\start_codex_light_tray.vbs
+   Bridge\dist\CodexLightTray.exe
    ```
 
-4. 第一次使用时，用可传输数据的 Type-C 线连接设备，右键托盘图标选择 `Configure WiFi`，输入路由器 SSID 和密码。
-5. Wi-Fi 保存成功后，可以拔掉电脑 USB，改用稳定 5 V 电源或从 MX1.25 接口接入的受保护单节锂电池供电；托盘会通过 UDP 控灯。
+3. 第一次使用时，用可传输数据的 Type-C 线连接设备，右键托盘图标选择 `Configure WiFi`，输入路由器 SSID 和密码。
+4. Wi-Fi 保存成功后，可以拔掉电脑 USB，改用稳定 5 V 电源或从 MX1.25 接口接入的受保护单节锂电池供电；托盘会通过 UDP 控灯。
+
+首次运行 EXE 会把内置运行环境和日志释放到 `%LOCALAPPDATA%\CodexLight`。Windows 防火墙首次询问时，请允许专用网络访问。
 
 完整流程见 [USAGE.md](USAGE.md)。
 
 ## 纯无线使用
 
 1. 先用 USB 完成一次 `Configure WiFi`。
-2. 确认托盘模式是 `Wireless only`，或用默认 `start_codex_light_tray.vbs` 启动。
+2. 确认托盘模式是 `Wireless only`，或直接启动默认无线模式的 `CodexLightTray.exe`。
 3. 断开电脑 USB，使用稳定 5 V 电源或从 MX1.25 接口接入的受保护单节锂电池给整机供电。
 4. 打开托盘后，日志应出现：
 

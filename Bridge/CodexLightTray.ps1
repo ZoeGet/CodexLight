@@ -26,6 +26,7 @@ if ([string]::IsNullOrWhiteSpace($WorkDir)) {
 }
 
 $monitorScript = Join-Path $scriptDir "codex_light_monitor.py"
+$monitorConfig = Join-Path $scriptDir "config.local.json"
 $logDir = Join-Path $scriptDir "logs"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
@@ -82,6 +83,54 @@ $monitorProcess = $null
 $currentMode = $ConnectionMode
 $wifiSetupState = $null
 
+function Start-BridgeProcess {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string[]]$ProcessArguments,
+    [Parameter(Mandatory = $true)]
+    [string]$OutputLog,
+    [Parameter(Mandatory = $true)]
+    [string]$ErrorLog
+  )
+
+  $argumentLine = ($ProcessArguments | ForEach-Object {
+    $value = [string]$_
+    if ($value -match '[\s"]') {
+      return '"' + $value.Replace('"', '\"') + '"'
+    }
+    return $value
+  }) -join " "
+
+  $startParameters = @{
+    FilePath = $pythonPath
+    ArgumentList = $argumentLine
+    WorkingDirectory = $WorkDir
+    WindowStyle = "Hidden"
+    PassThru = $true
+    RedirectStandardOutput = $OutputLog
+    RedirectStandardError = $ErrorLog
+  }
+  return Start-Process @startParameters
+}
+
+function Stop-BridgeProcess {
+  param([System.Diagnostics.Process]$Process)
+
+  if (-not $Process) {
+    return
+  }
+  try {
+    $Process.Refresh()
+    if ($Process.HasExited) {
+      return
+    }
+    $Process.Kill()
+    $Process.WaitForExit(3000) | Out-Null
+  } catch {
+    # Process may already be gone.
+  }
+}
+
 function Complete-WifiSetup {
   param([bool]$TimedOut = $false)
 
@@ -102,12 +151,7 @@ function Complete-WifiSetup {
   }
 
   if ($TimedOut -and -not $processExited) {
-    try {
-      $state.Process.Kill()
-      $state.Process.WaitForExit(1000) | Out-Null
-    } catch {
-      # Process may have exited between the timeout check and Kill.
-    }
+    Stop-BridgeProcess -Process $state.Process
     Add-Content -LiteralPath $wifiSetupErrLog -Value "WIFI_SETUP_ERROR TRAY_TIMEOUT" -ErrorAction SilentlyContinue
   }
 
@@ -254,19 +298,16 @@ function Invoke-WifiSetup {
 
       $args = @(
         $monitorScript,
+        "--config", $monitorConfig,
         "--serial", $SerialPort,
         "--baud", $SerialBaud.ToString(),
         "--wifi-config", $wifiConfigPath
       )
 
-      $process = Start-Process `
-        -FilePath $pythonPath `
-        -ArgumentList $args `
-        -WorkingDirectory $WorkDir `
-        -WindowStyle Hidden `
-        -RedirectStandardOutput $wifiSetupOutLog `
-        -RedirectStandardError $wifiSetupErrLog `
-        -PassThru
+      $process = Start-BridgeProcess `
+        -ProcessArguments $args `
+        -OutputLog $wifiSetupOutLog `
+        -ErrorLog $wifiSetupErrLog
 
       $script:wifiSetupState = [pscustomobject]@{
         Form = $form
@@ -337,28 +378,21 @@ function Start-Monitor {
 
   $args = New-Object System.Collections.Generic.List[string]
   $args.Add($monitorScript)
+  $args.Add("--config")
+  $args.Add($monitorConfig)
   foreach ($arg in (Get-MonitorArguments)) {
     $args.Add($arg)
   }
 
-  $script:monitorProcess = Start-Process `
-    -FilePath $pythonPath `
-    -ArgumentList $args.ToArray() `
-    -WorkingDirectory $WorkDir `
-    -WindowStyle Hidden `
-    -RedirectStandardOutput $stdoutLog `
-    -RedirectStandardError $stderrLog `
-    -PassThru
+  $script:monitorProcess = Start-BridgeProcess `
+    -ProcessArguments $args.ToArray() `
+    -OutputLog $stdoutLog `
+    -ErrorLog $stderrLog
 }
 
 function Stop-Monitor {
   if ($script:monitorProcess -and -not $script:monitorProcess.HasExited) {
-    try {
-      $script:monitorProcess.Kill()
-      $script:monitorProcess.WaitForExit(3000) | Out-Null
-    } catch {
-      # Process may already be gone.
-    }
+    Stop-BridgeProcess -Process $script:monitorProcess
   }
   $script:monitorProcess = $null
 }
@@ -461,11 +495,7 @@ try {
     }
   }
   if ($wifiSetupRunning) {
-    try {
-      $script:wifiSetupState.Process.Kill()
-    } catch {
-      # Process may already be gone.
-    }
+    Stop-BridgeProcess -Process $script:wifiSetupState.Process
     Remove-Item -LiteralPath $script:wifiSetupState.ConfigPath -Force -ErrorAction SilentlyContinue
   }
   Stop-Monitor

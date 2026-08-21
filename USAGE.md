@@ -9,13 +9,9 @@
 电脑端需要：
 
 - Windows 10/11
-- Python 3.9+
 - Codex Desktop
-- `pyserial`
 
-```powershell
-python -m pip install pyserial
-```
+直接使用 `Bridge\dist\CodexLightTray.exe` 不需要安装 Python。只有从源码运行 Bridge 时才需要 Python 3.9+ 和 `pyserial`。
 
 固件端需要 PlatformIO Core 或 VS Code PlatformIO IDE。PlatformIO 会自动安装 `Adafruit NeoPixel`。
 
@@ -40,7 +36,7 @@ PlatformIO Monitor、其他串口程序和 Bridge 不能同时占用同一个 CO
 当前固件不再开启 ESP32 热点配网，推荐使用托盘：
 
 1. 用 USB 数据线连接电脑和 CodexLight。
-2. 双击 `Bridge\start_codex_light_tray.vbs` 启动托盘。默认是 `WIRELESS` 模式。
+2. 双击 `Bridge\dist\CodexLightTray.exe` 启动托盘。默认是 `WIRELESS` 模式。
 3. 右键托盘图标，选择 `Configure WiFi`。
 4. 输入 2.4 GHz 路由器 SSID 和密码。
 5. 点击 `Save`。
@@ -59,32 +55,38 @@ python Bridge\codex_light_monitor.py --serial auto --wifi-ssid "YourWifi" --wifi
 DEVICE WIFI_SET_OK YourWifi 192.168.x.x
 ```
 
-失败日志：
+EXE 版失败日志：
 
 ```text
-Bridge\logs\wifi_setup.out.log
-Bridge\logs\wifi_setup.err.log
+%LOCALAPPDATA%\CodexLight\logs\wifi_setup.out.log
+%LOCALAPPDATA%\CodexLight\logs\wifi_setup.err.log
 ```
+
+源码版日志仍位于 `Bridge\logs`。
 
 ## Windows 托盘
 
-推荐启动方式：
+推荐直接双击单文件 EXE：
+
+```text
+Bridge\dist\CodexLightTray.exe
+```
+
+EXE 内置 64 位 Python 运行时和 `pyserial`，无需额外安装依赖；它不会显示控制台窗口，并默认进入 `WIRELESS` 模式。首次启动会把运行环境、日志和本地配置释放到 `%LOCALAPPDATA%\CodexLight`。退出时请右键托盘图标选择 `Exit`。
+
+首次启用 UDP 时，Windows 防火墙可能询问是否允许网络访问，请允许专用网络。源码启动器仍然保留：
 
 ```text
 Bridge\start_codex_light_tray.vbs
-```
-
-这个启动器会隐藏 PowerShell 窗口，并默认进入 `WIRELESS` 模式。退出时请右键托盘图标选择 `Exit`。
-
-旧批处理启动器仍可用：
-
-```text
 Bridge\start_codex_light_tray.bat
 ```
 
 可指定模式：
 
 ```powershell
+Bridge\dist\CodexLightTray.exe auto
+Bridge\dist\CodexLightTray.exe wired
+Bridge\dist\CodexLightTray.exe wireless
 Bridge\start_codex_light_tray.bat auto
 Bridge\start_codex_light_tray.bat wired
 Bridge\start_codex_light_tray.bat wireless
@@ -206,7 +208,7 @@ CODEXLIGHT/1 HELLO mac=<MAC> mode=<MODE>
 
 - 确认 USB 已连接，且 PlatformIO Monitor 或其他串口程序没有占用 COM 口。
 - ESP32-C3 只支持 2.4 GHz Wi-Fi。
-- 查看 `Bridge/logs/wifi_setup.out.log` 和 `Bridge/logs/wifi_setup.err.log`。
+- EXE 版查看 `%LOCALAPPDATA%\CodexLight\logs\wifi_setup.out.log` 和 `.err.log`；源码版查看 `Bridge/logs`。
 - 当前固件使用 ESP32-C3 SDK 默认的 Wi-Fi 发射功率，由 PHY 和地区配置决定。
 
 ### 纯无线没有响应

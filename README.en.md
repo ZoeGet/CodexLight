@@ -17,7 +17,7 @@ This is an independent community project and is not officially affiliated with o
 - ESP32-C3 uses the SDK default Wi-Fi transmit power, governed by PHY and country configuration.
 - Standalone operation does not depend on USB serial. The device can run from its battery connector or a stable 5 V supply in wireless mode.
 - Persistent `AUTO`, `WIRED`, and `WIRELESS` transport modes are supported.
-- `Bridge/start_codex_light_tray.vbs` starts the tray hidden and defaults to wireless mode.
+- Normal users double-click the standalone `Bridge/dist/CodexLightTray.exe`; it embeds Python and defaults to wireless tray mode.
 
 ## State Mapping
 
@@ -34,13 +34,7 @@ When the first valid desktop heartbeat arrives, the green LED blinks for two sec
 
 ## Quick Start
 
-1. Install the desktop dependency:
-
-   ```powershell
-   python -m pip install pyserial
-   ```
-
-2. Build and upload the firmware:
+1. Build and upload the firmware:
 
    ```powershell
    cd Firmware
@@ -48,21 +42,23 @@ When the first valid desktop heartbeat arrives, the green LED blinks for two sec
    pio run -t upload --upload-port COM4
    ```
 
-3. Start the hidden tray launcher. It defaults to wireless mode:
+2. Double-click the standalone tray EXE. It defaults to wireless mode and does not require a separate Python installation:
 
    ```text
-   Bridge\start_codex_light_tray.vbs
+   Bridge\dist\CodexLightTray.exe
    ```
 
-4. For first-time setup, connect the device with a data-capable Type-C cable, right-click the tray icon, choose `Configure WiFi`, and enter the router SSID/password.
-5. After Wi-Fi is saved, unplug the computer USB and power the device from a stable 5 V supply or a protected single-cell Li-ion battery connected through MX1.25. The tray controls the light over UDP.
+3. For first-time setup, connect the device with a data-capable Type-C cable, right-click the tray icon, choose `Configure WiFi`, and enter the router SSID/password.
+4. After Wi-Fi is saved, unplug the computer USB and power the device from a stable 5 V supply or a protected single-cell Li-ion battery connected through MX1.25. The tray controls the light over UDP.
+
+On first launch, the EXE extracts its embedded runtime and logs to `%LOCALAPPDATA%\CodexLight`. Allow private-network access if Windows Firewall prompts.
 
 See [USAGE.en.md](USAGE.en.md) for the full workflow.
 
 ## Wireless Operation
 
 1. Complete `Configure WiFi` once over USB.
-2. Use `Wireless only`, or start the default `start_codex_light_tray.vbs` launcher.
+2. Use `Wireless only`, or start `CodexLightTray.exe`, which defaults to wireless mode.
 3. Power the complete device from a stable 5 V supply or a protected single-cell Li-ion battery connected through MX1.25, without connecting USB to the computer.
 4. The tray log should show:
 

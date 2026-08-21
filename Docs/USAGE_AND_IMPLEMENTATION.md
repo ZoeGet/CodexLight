@@ -32,7 +32,7 @@ The current firmware does not open a SoftAP provisioning portal. Provisioning is
 Tray workflow:
 
 1. Connect the device over USB.
-2. Start `Bridge\start_codex_light_tray.vbs`, which defaults to `WIRELESS` mode.
+2. Double-click `Bridge\dist\CodexLightTray.exe`. It requires no separate Python installation and defaults to `WIRELESS` mode.
 3. Right-click the tray icon and choose `Configure WiFi`.
 4. Enter SSID/password and save.
 
@@ -71,17 +71,19 @@ The mode is stored under Preferences namespace `codexlight`, key `transport`.
 
 ## Windows Tray
 
-Use the hidden launcher, which defaults to `WIRELESS` mode:
+Normal users double-click the standalone EXE, which defaults to `WIRELESS` mode:
 
 ```text
-Bridge\start_codex_light_tray.vbs
+Bridge\dist\CodexLightTray.exe
 ```
+
+The EXE embeds a 64-bit Python runtime and `pyserial` and extracts them to `%LOCALAPPDATA%\CodexLight` on first launch. Allow private-network access if Windows Firewall prompts. Source debugging can still use `Bridge\start_codex_light_tray.vbs`.
 
 The tray hosts these user actions:
 
 - `Configure WiFi`: USB provisioning.
 - `Connection mode`: switches between AUTO, WIRED, and WIRELESS.
-- `Open log folder`: opens `Bridge/logs`.
+- `Open log folder`: opens the active log directory; `%LOCALAPPDATA%\CodexLight\logs` for the EXE and `Bridge/logs` for source mode.
 - `Restart monitor`: restarts `codex_light_monitor.py`.
 - `Exit`: stops the tray app.
 
@@ -125,7 +127,7 @@ It sends only state colors to the device.
 
 Session parsing accepts both legacy `function_call` / `function_call_output` and current `custom_tool_call` / `custom_tool_call_output` events. Calls containing `require_escalated`, `sandbox_permissions`, `request_user_input`, or another approval/permission marker remain `YELLOW` until the matching output event resolves the wait.
 
-The tray Wi-Fi setup path pauses the monitor, runs a one-shot `--wifi-config` child process, writes logs to `Bridge/logs/wifi_setup.*.log`, then restarts the monitor.
+The tray Wi-Fi setup path pauses the monitor, runs a one-shot `--wifi-config` child process, then restarts the monitor. The EXE writes `wifi_setup.*.log` under `%LOCALAPPDATA%\CodexLight\logs`; source mode writes it under `Bridge/logs`.
 
 ## Firmware Implementation
 
@@ -197,7 +199,7 @@ CODEXLIGHT/1 HELLO mac=<MAC> mode=<MODE>
 
 ## Troubleshooting
 
-- Wi-Fi setup fails: check `Bridge/logs/wifi_setup.out.log` and `.err.log`, close PlatformIO Monitor, and verify 2.4 GHz Wi-Fi.
+- Wi-Fi setup fails: for the EXE, check `%LOCALAPPDATA%\CodexLight\logs\wifi_setup.out.log` and `.err.log`; for source mode, check `Bridge/logs`. Also close PlatformIO Monitor and verify 2.4 GHz Wi-Fi.
 - Wireless does not update: confirm same LAN, allow UDP 4210 through firewall, and restart the tray to rediscover the device.
 - Slow yellow blink: Wi-Fi is connected and the firmware is waiting for desktop heartbeats; start the tray.
 - Red double-blink: saved Wi-Fi exists but connection is still failing or reconnecting.
@@ -212,6 +214,7 @@ CODEXLIGHT/1 HELLO mac=<MAC> mode=<MODE>
 
 ```powershell
 python -B -m py_compile Bridge\codex_light_monitor.py
+powershell -ExecutionPolicy Bypass -File Bridge\build_tray_exe.ps1
 cd Firmware
 pio run
 ```

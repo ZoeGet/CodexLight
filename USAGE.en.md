@@ -9,13 +9,9 @@ This guide covers firmware upload, USB Wi-Fi provisioning, wired/wireless/AUTO m
 Desktop requirements:
 
 - Windows 10/11
-- Python 3.9+
 - Codex Desktop
-- `pyserial`
 
-```powershell
-python -m pip install pyserial
-```
+`Bridge\dist\CodexLightTray.exe` does not require Python. Python 3.9+ and `pyserial` are needed only when running the Bridge from source.
 
 Firmware development requires PlatformIO Core or the VS Code PlatformIO IDE. PlatformIO installs `Adafruit NeoPixel` automatically.
 
@@ -40,7 +36,7 @@ PlatformIO Monitor, serial terminal apps, and the Bridge cannot use the same COM
 The current firmware no longer opens an ESP32 AP portal. Use the tray:
 
 1. Connect CodexLight to the computer over USB.
-2. Start the tray by double-clicking `Bridge\start_codex_light_tray.vbs`. This launcher defaults to `WIRELESS` mode.
+2. Start the tray by double-clicking `Bridge\dist\CodexLightTray.exe`. It defaults to `WIRELESS` mode.
 3. Right-click the tray icon and choose `Configure WiFi`.
 4. Enter the 2.4 GHz router SSID and password.
 5. Click `Save`.
@@ -59,32 +55,38 @@ Successful output:
 DEVICE WIFI_SET_OK YourWifi 192.168.x.x
 ```
 
-Failure logs:
+EXE failure logs:
 
 ```text
-Bridge\logs\wifi_setup.out.log
-Bridge\logs\wifi_setup.err.log
+%LOCALAPPDATA%\CodexLight\logs\wifi_setup.out.log
+%LOCALAPPDATA%\CodexLight\logs\wifi_setup.err.log
 ```
+
+Source-mode logs remain under `Bridge\logs`.
 
 ## Windows Tray
 
-Recommended launcher:
+Recommended standalone executable:
+
+```text
+Bridge\dist\CodexLightTray.exe
+```
+
+The EXE embeds a 64-bit Python runtime and `pyserial`, shows no console window, and defaults to `WIRELESS` mode. On first launch it extracts its runtime, logs, and local configuration to `%LOCALAPPDATA%\CodexLight`. To exit, right-click the tray icon and choose `Exit`.
+
+Windows Firewall may request network access when UDP is first enabled; allow private networks. The source launchers remain available:
 
 ```text
 Bridge\start_codex_light_tray.vbs
-```
-
-This starts the tray without leaving a PowerShell window open and defaults to `WIRELESS` mode. To exit, right-click the tray icon and choose `Exit`.
-
-The legacy batch launcher is still available:
-
-```text
 Bridge\start_codex_light_tray.bat
 ```
 
 Startup mode can be selected explicitly:
 
 ```powershell
+Bridge\dist\CodexLightTray.exe auto
+Bridge\dist\CodexLightTray.exe wired
+Bridge\dist\CodexLightTray.exe wireless
 Bridge\start_codex_light_tray.bat auto
 Bridge\start_codex_light_tray.bat wired
 Bridge\start_codex_light_tray.bat wireless
@@ -206,7 +208,7 @@ The default UDP port is `4210`.
 
 - Confirm USB is connected and PlatformIO Monitor or another serial terminal is not using the COM port.
 - ESP32-C3 supports 2.4 GHz Wi-Fi only.
-- Check `Bridge/logs/wifi_setup.out.log` and `Bridge/logs/wifi_setup.err.log`.
+- For the EXE build, check `%LOCALAPPDATA%\CodexLight\logs\wifi_setup.out.log` and `.err.log`; source-mode logs are under `Bridge/logs`.
 - The current firmware uses the ESP32-C3 SDK default Wi-Fi transmit power, governed by PHY and country configuration.
 
 ### Wireless mode does not respond

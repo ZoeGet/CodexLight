@@ -17,7 +17,7 @@ This is an independent community project and is not officially affiliated with o
 - ESP32-C3 uses the SDK default Wi-Fi transmit power, governed by PHY and country configuration.
 - Standalone operation does not depend on USB serial. The device can run from its battery connector or a stable 5 V supply in wireless mode.
 - Persistent `AUTO`, `WIRED`, and `WIRELESS` transport modes are supported.
-- Normal users double-click the standalone `Bridge/dist/CodexLightTray.exe`; it embeds Python and defaults to wireless tray mode.
+- Normal users double-click the standalone `Bridge/CodexLightTray.exe`; it embeds Python and defaults to wireless tray mode.
 
 ## State Mapping
 
@@ -45,7 +45,7 @@ When the first valid desktop heartbeat arrives, the green LED blinks for two sec
 2. Double-click the standalone tray EXE. It defaults to wireless mode and does not require a separate Python installation:
 
    ```text
-   Bridge\dist\CodexLightTray.exe
+   Bridge\CodexLightTray.exe
    ```
 
 3. For first-time setup, connect the device with a data-capable Type-C cable, right-click the tray icon, choose `Configure WiFi`, and enter the router SSID/password.
@@ -127,8 +127,8 @@ CodexLight/
 ## Verification
 
 ```powershell
-python -B -m py_compile Bridge\codex_light_monitor.py
-powershell -NoProfile -Command "$e=$null; [System.Management.Automation.PSParser]::Tokenize((Get-Content -LiteralPath 'Bridge\CodexLightTray.ps1' -Raw), [ref]$e) | Out-Null; if($e){$e; exit 1}else{'OK'}"
+python -B -m py_compile Bridge\Source\codex_light_monitor.py
+powershell -NoProfile -Command "$e=$null; [System.Management.Automation.PSParser]::Tokenize((Get-Content -LiteralPath 'Bridge\Source\CodexLightTray.ps1' -Raw), [ref]$e) | Out-Null; if($e){$e; exit 1}else{'OK'}"
 cd Firmware
 pio run
 ```

@@ -38,7 +38,7 @@ python -m pip install pyserial
 普通用户直接双击单文件程序：
 
 ```text
-Bridge\dist\CodexLightTray.exe
+Bridge\CodexLightTray.exe
 ```
 
 EXE 内置 64 位 Python 运行时和串口库，首次启动会释放到 `%LOCALAPPDATA%\CodexLight`，日志和本地设备配置也保存在该目录。首次使用 UDP 时，Windows 防火墙可能询问是否允许网络访问，请允许专用网络。
@@ -46,30 +46,30 @@ EXE 内置 64 位 Python 运行时和串口库，首次启动会释放到 `%LOCA
 从源码启动时，推荐双击隐藏启动器，默认进入 `WIRELESS` 模式：
 
 ```text
-Bridge\start_codex_light_tray.vbs
+Bridge\Source\start_codex_light_tray.vbs
 ```
 
 旧批处理也可用，但可能短暂显示控制台窗口：
 
 ```text
-Bridge\start_codex_light_tray.bat
+Bridge\Source\start_codex_light_tray.bat
 ```
 
 托盘菜单：
 
 - `Configure WiFi`：通过 USB 写入路由器 SSID/密码。
 - `Connection mode`：切换 `Auto (wired + wireless)`、`Wired only`、`Wireless only`。
-- `Open log folder`：打开当前运行版本的日志目录；EXE 版为 `%LOCALAPPDATA%\CodexLight\logs`，源码版为 `Bridge\logs`。
+- `Open log folder`：打开当前运行版本的日志目录；EXE 版为 `%LOCALAPPDATA%\CodexLight\logs`，源码版为 `Bridge\Source\logs`。
 - `Restart monitor`：重启监控进程。
 - `Exit`：退出。
 
 重新构建单文件 EXE：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File Bridge\build_tray_exe.ps1
+powershell -ExecutionPolicy Bypass -File Bridge\Source\build_tray_exe.ps1
 ```
 
-输出文件为 `Bridge\dist\CodexLightTray.exe`。构建过程使用本机 64 位 Python 和 Windows 自带的 .NET Framework C# 编译器，不需要联网。
+输出文件为 `Bridge\CodexLightTray.exe`。构建过程使用本机 64 位 Python 和 Windows 自带的 .NET Framework C# 编译器，不需要联网。
 
 ## Wi-Fi 配网
 
@@ -92,12 +92,12 @@ EXE 版失败日志保存到：
 %LOCALAPPDATA%\CodexLight\logs\wifi_setup.err.log
 ```
 
-源码版失败日志保存到 `Bridge\logs`。
+源码版失败日志保存到 `Bridge\Source\logs`。
 
 命令行配网：
 
 ```powershell
-python Bridge\codex_light_monitor.py --serial auto --wifi-ssid "YourWifi" --wifi-password "YourPassword"
+python Bridge\Source\codex_light_monitor.py --serial auto --wifi-ssid "YourWifi" --wifi-password "YourPassword"
 ```
 
 ## 运行模式
@@ -111,9 +111,9 @@ python Bridge\codex_light_monitor.py --serial auto --wifi-ssid "YourWifi" --wifi
 手动运行：
 
 ```powershell
-python Bridge\codex_light_monitor.py --serial auto --baud 115200
-python Bridge\codex_light_monitor.py --udp --udp-port 4210
-python Bridge\codex_light_monitor.py --serial auto --baud 115200 --udp --udp-port 4210 --firmware-mode AUTO
+python Bridge\Source\codex_light_monitor.py --serial auto --baud 115200
+python Bridge\Source\codex_light_monitor.py --udp --udp-port 4210
+python Bridge\Source\codex_light_monitor.py --serial auto --baud 115200 --udp --udp-port 4210 --firmware-mode AUTO
 ```
 
 ## 常用参数
@@ -134,14 +134,14 @@ python Bridge\codex_light_monitor.py --serial auto --baud 115200 --udp --udp-por
 ## 日志
 
 - EXE 版：`%LOCALAPPDATA%\CodexLight\logs`
-- 源码版：`Bridge\logs`
+- 源码版：`Bridge\Source\logs`
 - 两种版本均包含 `codex_light_monitor.out.log`、`codex_light_monitor.err.log`、`wifi_setup.out.log`、`wifi_setup.err.log`。
 
 ## 验证
 
 ```powershell
-python -B -m py_compile Bridge\codex_light_monitor.py
-powershell -NoProfile -Command "$e=$null; [System.Management.Automation.PSParser]::Tokenize((Get-Content -LiteralPath 'Bridge\CodexLightTray.ps1' -Raw), [ref]$e) | Out-Null; if($e){$e; exit 1}else{'OK'}"
+python -B -m py_compile Bridge\Source\codex_light_monitor.py
+powershell -NoProfile -Command "$e=$null; [System.Management.Automation.PSParser]::Tokenize((Get-Content -LiteralPath 'Bridge\Source\CodexLightTray.ps1' -Raw), [ref]$e) | Out-Null; if($e){$e; exit 1}else{'OK'}"
 ```
 
 ## License

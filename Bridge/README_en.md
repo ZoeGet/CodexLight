@@ -38,7 +38,7 @@ python -m pip install pyserial
 For normal use, double-click the standalone executable:
 
 ```text
-Bridge\dist\CodexLightTray.exe
+Bridge\CodexLightTray.exe
 ```
 
 The EXE embeds a 64-bit Python runtime and pyserial. On first launch it extracts runtime files to `%LOCALAPPDATA%\CodexLight`; logs and local device configuration are stored there as well. Windows Firewall may ask for network access the first time UDP is used; allow private networks.
@@ -46,30 +46,30 @@ The EXE embeds a 64-bit Python runtime and pyserial. On first launch it extracts
 When running from source, use the hidden launcher. It defaults to `WIRELESS` mode:
 
 ```text
-Bridge\start_codex_light_tray.vbs
+Bridge\Source\start_codex_light_tray.vbs
 ```
 
 The legacy batch launcher is also available, but it may briefly show a console window:
 
 ```text
-Bridge\start_codex_light_tray.bat
+Bridge\Source\start_codex_light_tray.bat
 ```
 
 Tray menu:
 
 - `Configure WiFi`: write router SSID/password over USB.
 - `Connection mode`: switch between `Auto (wired + wireless)`, `Wired only`, and `Wireless only`.
-- `Open log folder`: open the active runtime log directory; `%LOCALAPPDATA%\CodexLight\logs` for the EXE and `Bridge\logs` for source mode.
+- `Open log folder`: open the active runtime log directory; `%LOCALAPPDATA%\CodexLight\logs` for the EXE and `Bridge\Source\logs` for source mode.
 - `Restart monitor`: restart the monitor process.
 - `Exit`: quit.
 
 Rebuild the standalone EXE with:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File Bridge\build_tray_exe.ps1
+powershell -ExecutionPolicy Bypass -File Bridge\Source\build_tray_exe.ps1
 ```
 
-The output is `Bridge\dist\CodexLightTray.exe`. The build uses local 64-bit Python and the Windows .NET Framework C# compiler, and does not require network access.
+The output is `Bridge\CodexLightTray.exe`. The build uses local 64-bit Python and the Windows .NET Framework C# compiler, and does not require network access.
 
 ## Wi-Fi Provisioning
 
@@ -92,12 +92,12 @@ EXE failure logs are written to:
 %LOCALAPPDATA%\CodexLight\logs\wifi_setup.err.log
 ```
 
-Source-mode failure logs are written under `Bridge\logs`.
+Source-mode failure logs are written under `Bridge\Source\logs`.
 
 Command-line provisioning:
 
 ```powershell
-python Bridge\codex_light_monitor.py --serial auto --wifi-ssid "YourWifi" --wifi-password "YourPassword"
+python Bridge\Source\codex_light_monitor.py --serial auto --wifi-ssid "YourWifi" --wifi-password "YourPassword"
 ```
 
 ## Run Modes
@@ -111,9 +111,9 @@ python Bridge\codex_light_monitor.py --serial auto --wifi-ssid "YourWifi" --wifi
 Manual commands:
 
 ```powershell
-python Bridge\codex_light_monitor.py --serial auto --baud 115200
-python Bridge\codex_light_monitor.py --udp --udp-port 4210
-python Bridge\codex_light_monitor.py --serial auto --baud 115200 --udp --udp-port 4210 --firmware-mode AUTO
+python Bridge\Source\codex_light_monitor.py --serial auto --baud 115200
+python Bridge\Source\codex_light_monitor.py --udp --udp-port 4210
+python Bridge\Source\codex_light_monitor.py --serial auto --baud 115200 --udp --udp-port 4210 --firmware-mode AUTO
 ```
 
 ## Common Options
@@ -134,14 +134,14 @@ python Bridge\codex_light_monitor.py --serial auto --baud 115200 --udp --udp-por
 ## Logs
 
 - EXE build: `%LOCALAPPDATA%\CodexLight\logs`
-- Source mode: `Bridge\logs`
+- Source mode: `Bridge\Source\logs`
 - Both contain `codex_light_monitor.out.log`, `codex_light_monitor.err.log`, `wifi_setup.out.log`, and `wifi_setup.err.log`.
 
 ## Verification
 
 ```powershell
-python -B -m py_compile Bridge\codex_light_monitor.py
-powershell -NoProfile -Command "$e=$null; [System.Management.Automation.PSParser]::Tokenize((Get-Content -LiteralPath 'Bridge\CodexLightTray.ps1' -Raw), [ref]$e) | Out-Null; if($e){$e; exit 1}else{'OK'}"
+python -B -m py_compile Bridge\Source\codex_light_monitor.py
+powershell -NoProfile -Command "$e=$null; [System.Management.Automation.PSParser]::Tokenize((Get-Content -LiteralPath 'Bridge\Source\CodexLightTray.ps1' -Raw), [ref]$e) | Out-Null; if($e){$e; exit 1}else{'OK'}"
 ```
 
 ## License

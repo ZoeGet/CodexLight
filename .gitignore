@@ -27,9 +27,9 @@
 **/.pio-codex-build/
 **/.vscode/
 Firmware/include/wifi_secrets.h
-Bridge/config.local.json
-Bridge/logs/
-Bridge/__pycache__/
+Bridge/Source/config.local.json
+Bridge/Source/logs/
+Bridge/Source/__pycache__/
 **/__pycache__/
 *.py[cod]
 

@@ -11,7 +11,7 @@ Desktop requirements:
 - Windows 10/11
 - Codex Desktop
 
-`Bridge\dist\CodexLightTray.exe` does not require Python. Python 3.9+ and `pyserial` are needed only when running the Bridge from source.
+`Bridge\CodexLightTray.exe` does not require Python. Python 3.9+ and `pyserial` are needed only when running the Bridge from source.
 
 Firmware development requires PlatformIO Core or the VS Code PlatformIO IDE. PlatformIO installs `Adafruit NeoPixel` automatically.
 
@@ -36,7 +36,7 @@ PlatformIO Monitor, serial terminal apps, and the Bridge cannot use the same COM
 The current firmware no longer opens an ESP32 AP portal. Use the tray:
 
 1. Connect CodexLight to the computer over USB.
-2. Start the tray by double-clicking `Bridge\dist\CodexLightTray.exe`. It defaults to `WIRELESS` mode.
+2. Start the tray by double-clicking `Bridge\CodexLightTray.exe`. It defaults to `WIRELESS` mode.
 3. Right-click the tray icon and choose `Configure WiFi`.
 4. Enter the 2.4 GHz router SSID and password.
 5. Click `Save`.
@@ -46,7 +46,7 @@ On success, the tray shows `WiFi saved and connected.` The device saves credenti
 Command-line provisioning is also available:
 
 ```powershell
-python Bridge\codex_light_monitor.py --serial auto --wifi-ssid "YourWifi" --wifi-password "YourPassword"
+python Bridge\Source\codex_light_monitor.py --serial auto --wifi-ssid "YourWifi" --wifi-password "YourPassword"
 ```
 
 Successful output:
@@ -62,14 +62,14 @@ EXE failure logs:
 %LOCALAPPDATA%\CodexLight\logs\wifi_setup.err.log
 ```
 
-Source-mode logs remain under `Bridge\logs`.
+Source-mode logs remain under `Bridge\Source\logs`.
 
 ## Windows Tray
 
 Recommended standalone executable:
 
 ```text
-Bridge\dist\CodexLightTray.exe
+Bridge\CodexLightTray.exe
 ```
 
 The EXE embeds a 64-bit Python runtime and `pyserial`, shows no console window, and defaults to `WIRELESS` mode. On first launch it extracts its runtime, logs, and local configuration to `%LOCALAPPDATA%\CodexLight`. To exit, right-click the tray icon and choose `Exit`.
@@ -77,19 +77,19 @@ The EXE embeds a 64-bit Python runtime and `pyserial`, shows no console window, 
 Windows Firewall may request network access when UDP is first enabled; allow private networks. The source launchers remain available:
 
 ```text
-Bridge\start_codex_light_tray.vbs
-Bridge\start_codex_light_tray.bat
+Bridge\Source\start_codex_light_tray.vbs
+Bridge\Source\start_codex_light_tray.bat
 ```
 
 Startup mode can be selected explicitly:
 
 ```powershell
-Bridge\dist\CodexLightTray.exe auto
-Bridge\dist\CodexLightTray.exe wired
-Bridge\dist\CodexLightTray.exe wireless
-Bridge\start_codex_light_tray.bat auto
-Bridge\start_codex_light_tray.bat wired
-Bridge\start_codex_light_tray.bat wireless
+Bridge\CodexLightTray.exe auto
+Bridge\CodexLightTray.exe wired
+Bridge\CodexLightTray.exe wireless
+Bridge\Source\start_codex_light_tray.bat auto
+Bridge\Source\start_codex_light_tray.bat wired
+Bridge\Source\start_codex_light_tray.bat wireless
 ```
 
 Tray menu:
@@ -144,19 +144,19 @@ SERIAL setup skipped; using saved firmware mode.
 Wired:
 
 ```powershell
-python Bridge\codex_light_monitor.py --serial auto --baud 115200
+python Bridge\Source\codex_light_monitor.py --serial auto --baud 115200
 ```
 
 Wireless:
 
 ```powershell
-python Bridge\codex_light_monitor.py --udp --udp-port 4210
+python Bridge\Source\codex_light_monitor.py --udp --udp-port 4210
 ```
 
 AUTO:
 
 ```powershell
-python Bridge\codex_light_monitor.py --serial auto --baud 115200 --udp --udp-port 4210 --firmware-mode AUTO
+python Bridge\Source\codex_light_monitor.py --serial auto --baud 115200 --udp --udp-port 4210 --firmware-mode AUTO
 ```
 
 Wireless mode requires the computer and ESP32 to be on the same LAN, with router AP/client isolation disabled. Windows Firewall must allow Python to use UDP port `4210`.
@@ -208,7 +208,7 @@ The default UDP port is `4210`.
 
 - Confirm USB is connected and PlatformIO Monitor or another serial terminal is not using the COM port.
 - ESP32-C3 supports 2.4 GHz Wi-Fi only.
-- For the EXE build, check `%LOCALAPPDATA%\CodexLight\logs\wifi_setup.out.log` and `.err.log`; source-mode logs are under `Bridge/logs`.
+- For the EXE build, check `%LOCALAPPDATA%\CodexLight\logs\wifi_setup.out.log` and `.err.log`; source-mode logs are under `Bridge/Source/logs`.
 - The current firmware uses the ESP32-C3 SDK default Wi-Fi transmit power, governed by PHY and country configuration.
 
 ### Wireless mode does not respond
@@ -230,8 +230,8 @@ pio run -t upload --upload-port COM4
 ## Development Verification
 
 ```powershell
-python -B -m py_compile Bridge\codex_light_monitor.py
-powershell -NoProfile -Command "$e=$null; [System.Management.Automation.PSParser]::Tokenize((Get-Content -LiteralPath 'Bridge\CodexLightTray.ps1' -Raw), [ref]$e) | Out-Null; if($e){$e; exit 1}else{'OK'}"
+python -B -m py_compile Bridge\Source\codex_light_monitor.py
+powershell -NoProfile -Command "$e=$null; [System.Management.Automation.PSParser]::Tokenize((Get-Content -LiteralPath 'Bridge\Source\CodexLightTray.ps1' -Raw), [ref]$e) | Out-Null; if($e){$e; exit 1}else{'OK'}"
 cd Firmware
 pio run
 ```

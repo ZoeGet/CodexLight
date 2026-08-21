@@ -17,7 +17,7 @@ CodexLight 是一套基于 ESP32-C3FH4 的 Codex Desktop 状态灯。Windows 端
 - ESP32-C3 使用 SDK 默认的 Wi-Fi 发射功率，由 PHY 和地区配置决定。
 - 无电脑供电启动不依赖 USB 串口，可使用板载电池接口或稳定 5 V 电源进行纯无线摆放。
 - 支持 `AUTO`、`WIRED`、`WIRELESS` 三种持久化通信模式。
-- 普通用户直接双击单文件 `Bridge/dist/CodexLightTray.exe`；程序内置 Python 运行时并默认以无线模式驻留系统托盘。
+- 普通用户直接双击单文件 `Bridge/CodexLightTray.exe`；程序内置 Python 运行时并默认以无线模式驻留系统托盘。
 
 ## 状态定义
 
@@ -45,7 +45,7 @@ Bridge 兼容 Codex 会话日志中的普通工具调用和自定义工具调用
 2. 双击启动托盘 EXE，默认进入无线模式，无需另行安装 Python：
 
    ```text
-   Bridge\dist\CodexLightTray.exe
+   Bridge\CodexLightTray.exe
    ```
 
 3. 第一次使用时，用可传输数据的 Type-C 线连接设备，右键托盘图标选择 `Configure WiFi`，输入路由器 SSID 和密码。
@@ -127,8 +127,8 @@ CodexLight/
 ## 验证
 
 ```powershell
-python -B -m py_compile Bridge\codex_light_monitor.py
-powershell -NoProfile -Command "$e=$null; [System.Management.Automation.PSParser]::Tokenize((Get-Content -LiteralPath 'Bridge\CodexLightTray.ps1' -Raw), [ref]$e) | Out-Null; if($e){$e; exit 1}else{'OK'}"
+python -B -m py_compile Bridge\Source\codex_light_monitor.py
+powershell -NoProfile -Command "$e=$null; [System.Management.Automation.PSParser]::Tokenize((Get-Content -LiteralPath 'Bridge\Source\CodexLightTray.ps1' -Raw), [ref]$e) | Out-Null; if($e){$e; exit 1}else{'OK'}"
 cd Firmware
 pio run
 ```

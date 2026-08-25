@@ -22,7 +22,6 @@ import sqlite3
 import subprocess
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Iterable, Optional
 
@@ -684,24 +683,13 @@ def iter_jsonl_files(root: Path, max_age_days: int) -> Iterable[Path]:
         return []
 
     cutoff = time.time() - max_age_days * 24 * 60 * 60
-    files: list[Path] = []
-    dated_layout_found = False
-    today = datetime.now().date()
-
-    # The default Codex session layout is YYYY/MM/DD. Looking only in the
-    # relevant day directories avoids recursively walking the whole history on
-    # every poll. Custom layouts still use the recursive fallback.
-    for day_offset in range(max_age_days + 2):
-        day = today - timedelta(days=day_offset)
-        day_root = root / f"{day.year:04d}" / f"{day.month:02d}" / f"{day.day:02d}"
-        if not day_root.is_dir():
-            continue
-        dated_layout_found = True
-        files.extend(day_root.glob("*.jsonl"))
-
-    candidates = files if dated_layout_found else root.rglob("*.jsonl")
     recent_files = []
-    for path in candidates:
+    # Codex keeps a thread in the directory for the day on which it was
+    # created. Reopening that thread days later appends to the same JSONL file,
+    # so directory dates cannot be used to decide which sessions are active.
+    # Recursively enumerate file names and use the actual modification time;
+    # files are not opened here, which keeps discovery inexpensive.
+    for path in root.rglob("*.jsonl"):
         try:
             if path.stat().st_mtime >= cutoff:
                 recent_files.append(path)

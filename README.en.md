@@ -81,7 +81,7 @@ This means there is no computer serial link and the device is working over Wi-Fi
 
 ## Hardware
 
-<img src="Hardware/Images/焊接.png" width="800" />
+<img src="Hardware/Images/PCB实物图.jpg" width="800" />
 
 The image above shows the assembled front and back sides of the all-in-one board, including the ESP32-C3FH4, USB Type-C connector, battery connector and switch, antenna, ETA6093S2F power section, and three independent WS2812B status LEDs.
 

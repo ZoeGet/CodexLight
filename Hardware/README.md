@@ -32,7 +32,7 @@ The three LEDs use independent data lines, not a chained strip. The LED supply a
 
 ## Assembly Photo / 焊接实物
 
-<img src="Images/焊接.png" width="800" />
+<img src="Images/PCB实物图.jpg" width="800" />
 
 图片展示当前一体化主板正反面的焊接结果，包括主控、射频、USB、电池管理、稳压和三颗状态灯区域。
 

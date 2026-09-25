@@ -12,6 +12,7 @@ This directory contains supplemental documentation for users and maintainers.
 | [English Usage Guide](../USAGE.en.md) | Root English operating guide / 根目录英文操作手册 |
 | [使用与实现说明](使用与实现说明.md) | 中文操作、架构和维护说明 / Chinese usage, architecture, and maintenance guide |
 | [Usage and Implementation Guide](USAGE_AND_IMPLEMENTATION.md) | English usage, architecture, and maintenance guide / 英文操作、架构和维护说明 |
+| [获取 Codex 运行状态](获取Codex运行状态.md) | Codex 日志来源、状态判定、调试和排障说明 |
 
 根目录 README 和 USAGE 是主要用户入口。修改协议、配网、连接模式、GPIO、启动方式、纯无线供电或排障流程时，请同步更新中英文文档。
 
